@@ -1,8 +1,0 @@
-{
-  "id": "017",
-  "priority": 2,
-  "title": "Add vsm to PATH during installation",
-  "description": "Update install.sh to symlink the vsm CLI to ~/.local/bin/vsm (or /usr/local/bin/vsm) so users can run 'vsm status' from anywhere without ./vsm. Also add 'vsm' as a proper entry point. Update README to show 'vsm status' instead of './vsm status'.",
-  "created": "2026-02-15T01:06:00",
-  "status": "pending"
-}

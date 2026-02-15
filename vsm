@@ -313,6 +313,150 @@ def run_dashboard(args):
         print(f"\n{Colors.RED}Error running dashboard: {e}{Colors.RESET}")
         sys.exit(1)
 
+def email_scan(args):
+    """Scan inbox and classify emails"""
+    triage_script = VSM_ROOT / 'core' / 'gmail_triage.py'
+    try:
+        subprocess.run(['python3', str(triage_script), 'scan'], cwd=str(VSM_ROOT))
+    except Exception as e:
+        print(f"\n{Colors.RED}Error running email scan: {e}{Colors.RESET}")
+        sys.exit(1)
+
+def email_digest(args):
+    """Show daily email digest"""
+    triage_script = VSM_ROOT / 'core' / 'gmail_triage.py'
+    try:
+        subprocess.run(['python3', str(triage_script), 'digest'], cwd=str(VSM_ROOT))
+    except Exception as e:
+        print(f"\n{Colors.RED}Error running email digest: {e}{Colors.RESET}")
+        sys.exit(1)
+
+def email_setup(args):
+    """Run Gmail OAuth setup"""
+    triage_script = VSM_ROOT / 'core' / 'gmail_triage.py'
+    try:
+        subprocess.run(['python3', str(triage_script), 'setup'], cwd=str(VSM_ROOT))
+    except Exception as e:
+        print(f"\n{Colors.RED}Error running email setup: {e}{Colors.RESET}")
+        sys.exit(1)
+
+def inbox_list(args):
+    """List unread emails from inbox/ directory"""
+    inbox_dir = VSM_ROOT / 'inbox'
+
+    if not inbox_dir.exists():
+        print(f"{Colors.YELLOW}No inbox directory found{Colors.RESET}")
+        return
+
+    unread_files = []
+    for filepath in inbox_dir.glob('*.txt'):
+        content = filepath.read_text()
+        if 'Status: unread' in content:
+            unread_files.append(filepath)
+
+    if not unread_files:
+        print(f"{Colors.GREEN}No unread emails{Colors.RESET}")
+        return
+
+    print(f"\n{Colors.BOLD}{Colors.BLUE}═══ INBOX ({len(unread_files)} unread) ═══{Colors.RESET}\n")
+
+    for filepath in sorted(unread_files):
+        # Parse email file
+        content = filepath.read_text()
+        lines = content.split('\n')
+
+        thread_id = ""
+        sender = ""
+        subject = ""
+        date = ""
+
+        for line in lines:
+            if line.startswith('Thread-ID:'):
+                thread_id = line.split(':', 1)[1].strip()
+            elif line.startswith('From:'):
+                sender = line.split(':', 1)[1].strip()
+                if '<' in sender:
+                    sender = sender.split('<')[0].strip()
+            elif line.startswith('Subject:'):
+                subject = line.split(':', 1)[1].strip()
+            elif line.startswith('Date:'):
+                date = line.split(':', 1)[1].strip()[:16]  # Just date + time
+
+        print(f"{Colors.BOLD}{thread_id[:8]}{Colors.RESET} | {Colors.CYAN}{sender[:30]:<30}{Colors.RESET}")
+        print(f"         {Colors.DIM}{date}{Colors.RESET}")
+        print(f"         {subject[:70]}")
+        print()
+
+def inbox_sync(args):
+    """Manually trigger maildir sync"""
+    maildir_script = VSM_ROOT / 'core' / 'maildir.py'
+
+    print(f"{Colors.CYAN}Syncing inbox...{Colors.RESET}\n")
+
+    try:
+        subprocess.run(['python3', str(maildir_script), 'sync'], cwd=str(VSM_ROOT))
+        print(f"\n{Colors.GREEN}✓ Sync complete{Colors.RESET}")
+    except Exception as e:
+        print(f"\n{Colors.RED}Error running sync: {e}{Colors.RESET}")
+        sys.exit(1)
+
+def inbox_reply(args):
+    """Write reply to outbox/ directory"""
+    inbox_dir = VSM_ROOT / 'inbox'
+    outbox_dir = VSM_ROOT / 'outbox'
+
+    thread_id = args.thread_id
+    message = args.message
+
+    # Find the email file for this thread
+    email_file = None
+    for filepath in inbox_dir.glob(f"{thread_id}*.txt"):
+        email_file = filepath
+        break
+
+    if not email_file:
+        print(f"{Colors.RED}Error: Email thread {thread_id} not found in inbox{Colors.RESET}")
+        sys.exit(1)
+
+    # Parse email to get sender and subject
+    content = email_file.read_text()
+    lines = content.split('\n')
+
+    sender = ""
+    subject = ""
+
+    for line in lines:
+        if line.startswith('From:'):
+            sender = line.split(':', 1)[1].strip()
+            # Extract email address if in "Name <email>" format
+            if '<' in sender and '>' in sender:
+                sender = sender.split('<')[1].split('>')[0].strip()
+        elif line.startswith('Subject:'):
+            subject = line.split(':', 1)[1].strip()
+
+    if not sender:
+        print(f"{Colors.RED}Error: Could not parse sender from email file{Colors.RESET}")
+        sys.exit(1)
+
+    # Write reply to outbox
+    outbox_dir.mkdir(parents=True, exist_ok=True)
+
+    reply_file = outbox_dir / f"{thread_id}_reply.txt"
+    reply_content = f"""Thread-ID: {thread_id}
+To: {sender}
+Subject: Re: {subject}
+---
+{message}
+"""
+
+    reply_file.write_text(reply_content)
+
+    print(f"{Colors.GREEN}✓ Reply queued{Colors.RESET}")
+    print(f"  Thread: {thread_id}")
+    print(f"  To: {sender}")
+    print(f"  File: {reply_file.name}")
+    print(f"\n{Colors.DIM}Run 'vsm inbox sync' to send{Colors.RESET}")
+
 def main():
     parser = argparse.ArgumentParser(
         description='VSM — Viable System Machine CLI',
@@ -353,6 +497,43 @@ def main():
     dashboard_parser = subparsers.add_parser('dashboard', help='Start the web dashboard')
     dashboard_parser.set_defaults(func=run_dashboard)
 
+    # email command group
+    email_parser = subparsers.add_parser('email', help='Manage email triage')
+    email_subparsers = email_parser.add_subparsers(dest='email_command')
+
+    # email scan
+    email_scan_parser = email_subparsers.add_parser('scan', help='Scan inbox and classify emails')
+    email_scan_parser.set_defaults(func=email_scan)
+
+    # email digest
+    email_digest_parser = email_subparsers.add_parser('digest', help='Show daily email digest')
+    email_digest_parser.set_defaults(func=email_digest)
+
+    # email setup
+    email_setup_parser = email_subparsers.add_parser('setup', help='Run Gmail OAuth setup')
+    email_setup_parser.set_defaults(func=email_setup)
+
+    # inbox command group
+    inbox_parser = subparsers.add_parser('inbox', help='Manage email inbox (Maildir)')
+    inbox_subparsers = inbox_parser.add_subparsers(dest='inbox_command')
+
+    # inbox (list)
+    inbox_list_parser = inbox_subparsers.add_parser('list', help='List unread emails')
+    inbox_list_parser.set_defaults(func=inbox_list)
+
+    # inbox sync
+    inbox_sync_parser = inbox_subparsers.add_parser('sync', help='Sync inbox with agentmail')
+    inbox_sync_parser.set_defaults(func=inbox_sync)
+
+    # inbox reply
+    inbox_reply_parser = inbox_subparsers.add_parser('reply', help='Reply to an email')
+    inbox_reply_parser.add_argument('thread_id', help='Thread ID to reply to')
+    inbox_reply_parser.add_argument('message', help='Reply message')
+    inbox_reply_parser.set_defaults(func=inbox_reply)
+
+    # Default inbox command is list
+    inbox_parser.set_defaults(func=inbox_list)
+
     args = parser.parse_args()
 
     if not args.command:
@@ -362,6 +543,14 @@ def main():
     if args.command == 'task' and not args.task_command:
         task_parser.print_help()
         sys.exit(1)
+
+    if args.command == 'email' and not args.email_command:
+        email_parser.print_help()
+        sys.exit(1)
+
+    if args.command == 'inbox' and not args.inbox_command:
+        # Default to list if no subcommand
+        args.func = inbox_list
 
     # Execute the command
     if hasattr(args, 'func'):

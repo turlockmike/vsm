@@ -96,7 +96,7 @@ def check_inbox(unreplied_only=True):
     inbox_id = get_inbox_id()
 
     # List threads, optionally filtering to unreplied
-    labels = ["unreplied"] if unreplied_only else None
+    labels = ["unread"] if unreplied_only else None
     threads_data = list_threads(inbox_id, labels=labels)
 
     result = {

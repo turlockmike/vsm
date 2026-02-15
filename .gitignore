@@ -2,3 +2,14 @@ state/
 __pycache__/
 *.pyc
 .env
+
+# Email content (private)
+inbox/
+outbox/
+sent/
+
+# Gmail OAuth credentials and tokens
+state/gmail_credentials.json
+state/gmail_token.json
+state/gmail_config.json
+state/gmail_triage_state.json

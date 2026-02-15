@@ -50,6 +50,8 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.serve_events()
         elif self.path == '/api/chat/history':
             self.serve_chat_history()
+        elif self.path == '/api/version':
+            self.serve_version()
         else:
             # Serve static files
             super().do_GET()
@@ -182,6 +184,36 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({"servers": servers}).encode())
         except Exception as e:
             self.send_error(500, f"Error reading MCP config: {e}")
+
+    def serve_version(self):
+        """Serve version and system info"""
+        try:
+            # Get system start time from state file
+            uptime_hours = 0
+            if STATE_FILE.exists():
+                state_data = json.loads(STATE_FILE.read_text())
+                created = state_data.get('created', '')
+                if created:
+                    from datetime import datetime
+                    created_dt = datetime.fromisoformat(created)
+                    uptime_hours = (datetime.now() - created_dt).total_seconds() / 3600
+
+            version_info = {
+                "version": "1.0",
+                "build_date": datetime.now().strftime('%Y-%m-%d'),
+                "system": "VSM - Viable System Machine",
+                "status": "LIVE - ACTIVE",
+                "uptime_hours": round(uptime_hours, 1),
+                "description": "Autonomous AI Computer System built on Claude Code"
+            }
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(version_info).encode())
+        except Exception as e:
+            self.send_error(500, f"Error reading version: {e}")
 
     def serve_events(self):
         """Serve Server-Sent Events for state updates"""

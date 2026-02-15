@@ -22,6 +22,23 @@
             padding: 0 20px;
         }
 
+        /* Live System Banner */
+        .live-system-banner {
+            background: linear-gradient(90deg, #003300, #004400, #003300);
+            border-bottom: 3px solid #00ff00;
+            padding: 8px 0;
+            text-align: center;
+            font-weight: bold;
+            letter-spacing: 3px;
+            font-size: 0.9em;
+            animation: banner-pulse 3s infinite;
+            box-shadow: 0 2px 15px rgba(0, 255, 0, 0.3);
+        }
+        @keyframes banner-pulse {
+            0%, 100% { background: linear-gradient(90deg, #003300, #004400, #003300); }
+            50% { background: linear-gradient(90deg, #004400, #005500, #004400); }
+        }
+
         /* Header Bar */
         .header-bar {
             background: #111;
@@ -46,6 +63,22 @@
             font-size: 1.8em;
             color: #00ff00;
             text-shadow: 0 0 10px #00ff00;
+            flex: 1;
+        }
+        .live-badge {
+            background: #ff0000;
+            color: #ffffff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.6em;
+            font-weight: bold;
+            letter-spacing: 2px;
+            animation: pulse-live 2s infinite;
+            box-shadow: 0 0 20px #ff0000;
+        }
+        @keyframes pulse-live {
+            0%, 100% { opacity: 1; box-shadow: 0 0 20px #ff0000; }
+            50% { opacity: 0.7; box-shadow: 0 0 30px #ff0000; }
         }
         .header-stats {
             display: flex;
@@ -464,26 +497,41 @@
     </style>
 </head>
 <body>
+    <div class="live-system-banner">
+        VSM AUTONOMOUS SYSTEM - LIVE - RUNNING ON THIS MACHINE - CYCLE <span id="banner-cycle">22</span>
+    </div>
     <div class="header-bar">
         <div class="header-content">
-            <div class="header-title">VSM</div>
+            <div class="header-title">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <span style="font-size: 2em;">VSM</span>
+                    <span class="live-badge">LIVE</span>
+                </div>
+                <div style="font-size: 0.5em; color: #888; margin-top: 5px;">
+                    Viable System Machine - Autonomous AI Computer - Cycle <span id="title-cycle">22</span>
+                </div>
+            </div>
             <div class="header-stats">
-                <div class="header-badge">
+                <div class="header-badge" style="border-color: #00ff00; background: #001100;">
                     <span class="criticality-dot criticality-low" id="criticality-indicator"></span>
                     <label>Criticality:</label>
-                    <span id="header-criticality">--</span>
+                    <span id="header-criticality" style="font-size: 1.2em; color: #00ff00;">--</span>
                 </div>
                 <div class="header-badge">
                     <label>Cycle:</label>
                     <span id="header-cycle">--</span>
                 </div>
                 <div class="header-badge">
-                    <label>Uptime:</label>
+                    <label>System Uptime:</label>
                     <span id="header-uptime">--</span>
                 </div>
                 <div class="header-badge">
                     <label>Status:</label>
-                    <span id="header-status">--</span>
+                    <span id="header-status" class="status-ok">--</span>
+                </div>
+                <div class="header-badge" style="border-color: #00cc00;">
+                    <label>Last Update:</label>
+                    <span id="last-updated" style="color: #00ff00;">--</span>
                 </div>
             </div>
         </div>
@@ -491,18 +539,18 @@
 
     <div class="container">
         <div class="grid">
-            <div class="card">
-                <h2>System Status</h2>
-                <div class="metric">
-                    <span class="metric-label">Criticality:</span>
-                    <span class="metric-value" id="criticality">--</span>
+            <div class="card" style="border: 2px solid #00ff00; background: #0a1a0a;">
+                <h2 style="font-size: 1.5em; color: #00ff00;">LIVE SYSTEM STATUS</h2>
+                <div style="text-align: center; padding: 20px 0; border-bottom: 1px solid #333; margin-bottom: 15px;">
+                    <div style="font-size: 0.9em; color: #888; margin-bottom: 10px;">SYSTEM CRITICALITY LEVEL</div>
+                    <div style="font-size: 3em; font-weight: bold; color: #00ff00;" id="criticality-large">--</div>
+                    <div class="criticality-bar" style="height: 30px; margin-top: 15px;">
+                        <div class="criticality-fill" id="criticality-bar"></div>
+                    </div>
                 </div>
-                <div class="criticality-bar">
-                    <div class="criticality-fill" id="criticality-bar"></div>
-                </div>
                 <div class="metric">
-                    <span class="metric-label">Cycle Count:</span>
-                    <span class="metric-value" id="cycle-count">--</span>
+                    <span class="metric-label">Active Cycle:</span>
+                    <span class="metric-value" style="font-size: 1.3em;" id="cycle-count">--</span>
                 </div>
                 <div class="metric">
                     <span class="metric-label">Last Action:</span>
@@ -519,7 +567,29 @@
             </div>
 
             <div class="card">
-                <h2>Health Metrics</h2>
+                <h2>System Information</h2>
+                <div style="background: #001100; border: 1px solid #00ff00; padding: 15px; margin-bottom: 15px; border-radius: 4px;">
+                    <div style="text-align: center; margin-bottom: 10px;">
+                        <span style="font-size: 1.3em; color: #00ff00; font-weight: bold;">ACTIVE VSM INSTANCE</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Version:</span>
+                        <span class="metric-value">1.0 (Current)</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Status:</span>
+                        <span class="metric-value status-ok">RUNNING LIVE</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">System Uptime:</span>
+                        <span class="metric-value" id="system-uptime-display">--</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Location:</span>
+                        <span class="metric-value" style="font-size: 0.8em;">192.168.4.238:80</span>
+                    </div>
+                </div>
+                <h2 style="margin-top: 20px;">Health Metrics</h2>
                 <div class="metric">
                     <span class="metric-label">Pending Tasks:</span>
                     <span class="metric-value" id="pending-tasks">--</span>
@@ -628,9 +698,10 @@
         </div>
 
         <div class="footer">
-            VSM v0.1 | Autonomous AI Computer System |
+            VSM v1.0 - Cycle <span id="footer-cycle">22</span> | Autonomous AI Computer System - ACTIVE |
             Built on <a href="https://claude.ai/claude-code" target="_blank">Claude Code</a> |
-            <span id="connection-status">Connected</span>
+            <span id="connection-status">Connected</span> |
+            Build: <span id="build-timestamp">2026-02-14</span>
         </div>
     </div>
 
@@ -693,12 +764,22 @@
                 // Update header
                 updateMetricValue('header-criticality', state.criticality.toFixed(2));
                 updateMetricValue('header-cycle', state.cycle_count);
+                updateMetricValue('title-cycle', state.cycle_count);
+                updateMetricValue('footer-cycle', state.cycle_count);
+                updateMetricValue('banner-cycle', state.cycle_count);
                 updateMetricValue('header-uptime', formatUptime(startTime));
+                updateMetricValue('system-uptime-display', formatUptime(startTime));
                 updateMetricValue('header-status', state.last_result_success ? 'OK' : 'ERROR');
+                updateMetricValue('last-updated', new Date().toLocaleTimeString());
                 updateCriticalityIndicator(state.criticality);
+
+                // Update header status color
+                const statusEl = document.getElementById('header-status');
+                statusEl.className = 'metric-value ' + (state.last_result_success ? 'status-ok' : 'status-error');
 
                 // System Status
                 updateMetricValue('criticality', state.criticality.toFixed(2));
+                updateMetricValue('criticality-large', state.criticality.toFixed(2));
                 document.getElementById('criticality-bar').style.width = (state.criticality * 100) + '%';
                 updateMetricValue('cycle-count', state.cycle_count);
 
@@ -1085,6 +1166,14 @@
         setInterval(() => {
             document.getElementById('header-uptime').textContent = formatUptime(startTime);
         }, 60000);
+
+        // Update "last updated" timestamp every 5 seconds
+        setInterval(() => {
+            document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+        }, 5000);
+
+        // Set build timestamp
+        document.getElementById('build-timestamp').textContent = new Date().toISOString().split('T')[0];
     </script>
 </body>
 </html>

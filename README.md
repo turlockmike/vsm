@@ -76,11 +76,12 @@ tail -f ~/vsm/state/logs/heartbeat.log
 ## CLI Usage
 
 ```bash
-./vsm status              # Show system status, health metrics, errors
-./vsm task list           # List all pending tasks
-./vsm task add "Title"    # Add a task (--description, --priority flags)
-./vsm logs                # Show recent cycle logs (-n 10 for more)
-./vsm run                 # Manually trigger a heartbeat cycle
+vsm status              # Show system status, health metrics, errors
+vsm task list           # List all pending tasks
+vsm task add "Title"    # Add a task (--description, --priority flags)
+vsm logs                # Show recent cycle logs (-n 10 for more)
+vsm dashboard           # Open interactive dashboard
+vsm run                 # Manually trigger a heartbeat cycle
 ```
 
 ## Mission

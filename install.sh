@@ -28,7 +28,7 @@ echo "╚═══════════════════════�
 echo -e "${NC}"
 
 # Check OS compatibility
-echo -e "\n${BLUE}[1/7]${NC} Checking system compatibility..."
+echo -e "\n${BLUE}[1/8]${NC} Checking system compatibility..."
 OS="$(uname -s)"
 case "$OS" in
     Linux*)     echo -e "${CHECK} Linux detected" ;;
@@ -37,7 +37,7 @@ case "$OS" in
 esac
 
 # Check prerequisites
-echo -e "\n${BLUE}[2/7]${NC} Verifying prerequisites..."
+echo -e "\n${BLUE}[2/8]${NC} Verifying prerequisites..."
 
 # Python 3
 if command -v python3 &> /dev/null; then
@@ -84,7 +84,7 @@ else
 fi
 
 # Clone or update repository
-echo -e "\n${BLUE}[3/7]${NC} Setting up VSM repository..."
+echo -e "\n${BLUE}[3/8]${NC} Setting up VSM repository..."
 
 if [ -d "$VSM_DIR" ]; then
     echo -e "${WARN} Directory $VSM_DIR already exists."
@@ -116,7 +116,7 @@ fi
 cd "$VSM_DIR"
 
 # Set up directory structure
-echo -e "\n${BLUE}[4/7]${NC} Creating directory structure..."
+echo -e "\n${BLUE}[4/8]${NC} Creating directory structure..."
 
 mkdir -p state/logs
 mkdir -p sandbox/tasks
@@ -146,8 +146,59 @@ else
     echo -e "${WARN} state/state.json already exists, not overwriting"
 fi
 
+# Update heartbeat.sh to use correct VSM_ROOT
+echo -e "\n${BLUE}[5/8]${NC} Configuring heartbeat script..."
+
+if [ "$VSM_DIR" != "$HOME/projects/vsm/main" ]; then
+    # Need to update VSM_ROOT in heartbeat.sh
+    if grep -q "VSM_ROOT=" heartbeat.sh; then
+        # Create a backup
+        cp heartbeat.sh heartbeat.sh.bak
+        # Update the path
+        sed -i.tmp "s|VSM_ROOT=.*|VSM_ROOT=\"$VSM_DIR\"|" heartbeat.sh
+        rm -f heartbeat.sh.tmp
+        echo -e "${CHECK} heartbeat.sh configured for $VSM_DIR"
+    fi
+else
+    echo -e "${CHECK} Using default VSM_ROOT path"
+fi
+
+# Install vsm CLI to PATH
+echo -e "\n${BLUE}[6/8]${NC} Installing vsm CLI to PATH..."
+
+# Make vsm executable
+chmod +x "$VSM_DIR/vsm"
+echo -e "${CHECK} vsm CLI made executable"
+
+# Create ~/.local/bin if it doesn't exist
+mkdir -p "$HOME/.local/bin"
+echo -e "${CHECK} ~/.local/bin directory ready"
+
+# Remove old symlink if it exists
+if [ -L "$HOME/.local/bin/vsm" ]; then
+    rm "$HOME/.local/bin/vsm"
+    echo -e "${CHECK} Removed old vsm symlink"
+fi
+
+# Create symlink
+ln -s "$VSM_DIR/vsm" "$HOME/.local/bin/vsm"
+echo -e "${CHECK} Symlinked vsm to ~/.local/bin/vsm"
+
+# Check if ~/.local/bin is in PATH
+if [[ ":$PATH:" == *":$HOME/.local/bin:"* ]]; then
+    echo -e "${CHECK} ~/.local/bin is already in PATH"
+else
+    echo -e "${WARN} ~/.local/bin is not in your PATH"
+    echo -e "${YELLOW}   Add this line to your shell profile (~/.bashrc or ~/.zshrc):${NC}"
+    echo -e "   ${BLUE}export PATH=\"\$HOME/.local/bin:\$PATH\"${NC}"
+    echo ""
+    echo -e "   Then reload your shell:"
+    echo -e "   ${BLUE}source ~/.bashrc${NC}  (or source ~/.zshrc)"
+    echo ""
+fi
+
 # Guide .env setup
-echo -e "\n${BLUE}[5/7]${NC} Environment configuration..."
+echo -e "\n${BLUE}[7/8]${NC} Environment configuration..."
 
 if [ -f ".env" ]; then
     echo -e "${WARN} .env file already exists, not overwriting"
@@ -184,25 +235,8 @@ else
     fi
 fi
 
-# Update heartbeat.sh to use correct VSM_ROOT
-echo -e "\n${BLUE}[6/7]${NC} Configuring heartbeat script..."
-
-if [ "$VSM_DIR" != "$HOME/projects/vsm/main" ]; then
-    # Need to update VSM_ROOT in heartbeat.sh
-    if grep -q "VSM_ROOT=" heartbeat.sh; then
-        # Create a backup
-        cp heartbeat.sh heartbeat.sh.bak
-        # Update the path
-        sed -i.tmp "s|VSM_ROOT=.*|VSM_ROOT=\"$VSM_DIR\"|" heartbeat.sh
-        rm -f heartbeat.sh.tmp
-        echo -e "${CHECK} heartbeat.sh configured for $VSM_DIR"
-    fi
-else
-    echo -e "${CHECK} Using default VSM_ROOT path"
-fi
-
 # Create/update cron job
-echo -e "\n${BLUE}[7/7]${NC} Setting up cron job..."
+echo -e "\n${BLUE}[8/8]${NC} Setting up cron job..."
 
 CRON_ENTRY="*/5 * * * * $VSM_DIR/heartbeat.sh"
 
@@ -251,17 +285,23 @@ echo ""
 echo "1. Verify your .env configuration:"
 echo -e "   ${BLUE}cat $VSM_DIR/.env${NC}"
 echo ""
-echo "2. Add a task to the queue:"
-echo -e "   ${BLUE}echo '{\"task\": \"Say hello\", \"created\": \"$(date -Iseconds)\"}' > $VSM_DIR/sandbox/tasks/001-hello.json${NC}"
+echo "2. Check system status:"
+echo -e "   ${BLUE}vsm status${NC}"
 echo ""
-echo "3. Check system status:"
-echo -e "   ${BLUE}tail -f $VSM_DIR/state/logs/heartbeat.log${NC}"
+echo "3. Add a task to the queue:"
+echo -e "   ${BLUE}vsm task add \"Say hello\"${NC}"
 echo ""
-echo "4. View cron jobs:"
+echo "4. View logs:"
+echo -e "   ${BLUE}vsm logs${NC}"
+echo ""
+echo "5. Open the dashboard:"
+echo -e "   ${BLUE}vsm dashboard${NC}"
+echo ""
+echo "6. Manual test run:"
+echo -e "   ${BLUE}vsm run${NC}"
+echo ""
+echo "7. View cron jobs:"
 echo -e "   ${BLUE}crontab -l${NC}"
-echo ""
-echo "5. Manual test run:"
-echo -e "   ${BLUE}cd $VSM_DIR && ./heartbeat.sh${NC}"
 echo ""
 echo -e "${YELLOW}Documentation:${NC} https://github.com/turlockmike/vsm"
 echo -e "${YELLOW}Support:${NC} Open an issue on GitHub"

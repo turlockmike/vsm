@@ -21,6 +21,11 @@ LOG_DIR = STATE_DIR / "logs"
 TASKS_DIR = VSM_ROOT / "sandbox" / "tasks"
 CLAUDE_BIN = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
 
+# Observation memory paths — the system's long-term memory
+HOME_OBS = Path.home() / ".claude" / "projects" / "-home-mike" / "memory" / "observations.md"
+VSM_OBS_DIR = Path.home() / ".claude" / "projects" / "-home-mike-projects-vsm-main" / "memory"
+VSM_OBS = VSM_OBS_DIR / "observations.md"
+
 
 def load_state():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -107,6 +112,29 @@ def gather_recent_logs(n=3):
     return summaries
 
 
+def load_observations():
+    """Load observational memory from both home scope and VSM project scope."""
+    obs_parts = []
+    for obs_file, label in [(HOME_OBS, "owner-context"), (VSM_OBS, "vsm-cycles")]:
+        if obs_file.exists() and obs_file.stat().st_size > 0:
+            content = obs_file.read_text().strip()
+            if content:
+                # Truncate if huge — keep most recent (end of file)
+                if len(content) > 15000:
+                    content = "[...truncated...]\n" + content[-15000:]
+                obs_parts.append(f"[{label}]\n{content}")
+    return "\n\n".join(obs_parts) if obs_parts else ""
+
+
+def save_cycle_observation(cycle_count, mode, summary):
+    """Append a brief observation from this cycle to the VSM observations file."""
+    VSM_OBS_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    entry = f"\nCycle {cycle_count} ({timestamp}) [{mode}]: {summary}\n"
+    with open(VSM_OBS, "a") as f:
+        f.write(entry)
+
+
 def build_prompt(state, health, tasks, recent_logs, inbox_messages=None):
     # Build urgent inbox section if owner emails are present
     urgent_section = ""
@@ -123,7 +151,12 @@ def build_prompt(state, health, tasks, recent_logs, inbox_messages=None):
             urgent_section += "---\n\n"
         urgent_section += "Reply to ALL of these before doing anything else. Be helpful and concise.\n\n"
 
-    return f"""{urgent_section}You are System 5 — the lead coordinator of a Viable System Machine. Race against time.
+    observations = load_observations()
+    memory_section = ""
+    if observations:
+        memory_section = f"## Memory (observations from previous sessions)\n{observations}\n\n"
+
+    return f"""{urgent_section}{memory_section}You are System 5 — the lead coordinator of a Viable System Machine. Race against time.
 
 Purpose: become the most useful autonomous system possible. Ship fast or fade.
 
@@ -328,6 +361,17 @@ def main():
             except Exception:
                 pass
     else:
+        # Extract a brief summary from output for observation memory
+        output_preview = result["output"][:300].replace("\n", " ").strip()
+        if output_preview:
+            try:
+                save_cycle_observation(
+                    state.get("cycle_count", 0),
+                    "cycle",
+                    output_preview[:200]
+                )
+            except Exception:
+                pass
         print(f"[VSM] System 5 completed cycle. Output preview:")
         print(result["output"][:500])
 

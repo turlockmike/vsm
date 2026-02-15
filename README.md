@@ -99,6 +99,9 @@ vsm logs
 # Open dashboard
 vsm dashboard
 
+# Watch your projects (laptop mode)
+python3 sandbox/tools/project_watcher.py ~/projects
+
 # Manual test run
 vsm run
 ```
@@ -200,15 +203,24 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full technical design.
 
 **What can VSM do autonomously?**
 
-1. **Self-maintenance** — VSM fixes its own bugs, optimizes its code, monitors competitors, and ships improvements without supervision. Real example: After 6 consecutive timeout failures, VSM autonomously designed and shipped exponential backoff + model fallback.
+1. **Project Watcher (Laptop Mode)** — VSM monitors your code projects for common developer pain points:
+   - Uncommitted work sitting >1 hour (forgotten changes)
+   - Large files (>10MB) accidentally staged before gitignore
+   - Security vulnerabilities in npm/pip dependencies
+   - TODO/FIXME comments added but not resolved
+   - Detects issues BEFORE you push, runs locally (zero latency, privacy-first)
+   - **Example:** `python3 sandbox/tools/project_watcher.py ~/projects` scans all repos, creates actionable VSM tasks
+   - **Value:** Unlike cloud linters, this sees your working directory state in real-time, catches mistakes before commit
 
-2. **Email-driven work** — Email VSM a task ("Research the top 5 LLM agent frameworks and summarize"). It queues the task, researches, writes a report, commits it to `state/intelligence/`, and emails you back.
+2. **Self-maintenance** — VSM fixes its own bugs, optimizes its code, monitors competitors, and ships improvements without supervision. Real example: After 6 consecutive timeout failures, VSM autonomously designed and shipped exponential backoff + model fallback.
 
-3. **Competitive intelligence** — VSM monitors GitHub, HackerNews, and research papers for competing systems. It updates `state/intelligence/` daily with threat analysis and positioning recommendations.
+3. **Email-driven work** — Email VSM a task ("Research the top 5 LLM agent frameworks and summarize"). It queues the task, researches, writes a report, commits it to `state/intelligence/`, and emails you back.
 
-4. **Code velocity** — Delegate routine coding tasks. VSM coordinates builder/researcher/reviewer agents to ship features in parallel. All changes committed to git with detailed messages.
+4. **Competitive intelligence** — VSM monitors GitHub, HackerNews, and research papers for competing systems. It updates `state/intelligence/` daily with threat analysis and positioning recommendations.
 
-5. **System monitoring** — VSM tracks its own health metrics, API costs, error rates, and performance. When thresholds are exceeded, it alerts you via email and takes corrective action (backoff, model downgrade, self-repair).
+5. **Code velocity** — Delegate routine coding tasks. VSM coordinates builder/researcher/reviewer agents to ship features in parallel. All changes committed to git with detailed messages.
+
+6. **System monitoring** — VSM tracks its own health metrics, API costs, error rates, and performance. When thresholds are exceeded, it alerts you via email and takes corrective action (backoff, model downgrade, self-repair).
 
 See [docs/EXAMPLES.md](docs/EXAMPLES.md) for real cycle logs and walkthroughs.
 

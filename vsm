@@ -299,7 +299,7 @@ def run_heartbeat(args):
 
 def run_dashboard(args):
     """Start the web dashboard"""
-    dashboard_script = VSM_ROOT / 'core' / 'dashboard.py'
+    dashboard_script = VSM_ROOT / 'web' / 'server.py'
 
     if not dashboard_script.exists():
         print(f"{Colors.RED}Error: Dashboard script not found at {dashboard_script}{Colors.RESET}")

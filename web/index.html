@@ -120,6 +120,78 @@
             background: linear-gradient(90deg, #00ff00, #ffaa00, #ff0000);
             transition: width 0.3s ease;
         }
+        form {
+            margin-top: 15px;
+        }
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 10px;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            color: #00ff00;
+            margin-bottom: 10px;
+            font-family: 'Courier New', monospace;
+        }
+        input[type="number"] {
+            width: 80px;
+            padding: 10px;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            color: #00ff00;
+            margin-bottom: 10px;
+            font-family: 'Courier New', monospace;
+        }
+        button {
+            background: #00cc00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+        button:hover {
+            background: #00ff00;
+        }
+        .form-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .form-row label {
+            color: #888;
+            font-size: 0.9em;
+        }
+        .log-detail {
+            background: #0a0a0a;
+            padding: 8px;
+            margin: 5px 0;
+            font-size: 0.85em;
+            border-left: 2px solid #00cc00;
+        }
+        .log-detail.failed {
+            border-left-color: #ff0000;
+        }
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        .log-reason {
+            color: #888;
+            font-size: 0.85em;
+            margin: 3px 0;
+        }
+        .log-summary {
+            color: #00ff00;
+            white-space: pre-wrap;
+            max-height: 60px;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body>
@@ -180,6 +252,19 @@
             </div>
 
             <div class="card">
+                <h2>Add Task</h2>
+                <form id="task-form" onsubmit="addTask(event)">
+                    <input type="text" id="task-title" placeholder="Task title" required>
+                    <textarea id="task-description" placeholder="Task description (optional)" rows="3"></textarea>
+                    <div class="form-row">
+                        <label for="task-priority">Priority:</label>
+                        <input type="number" id="task-priority" value="5" min="1" max="10">
+                        <button type="submit">Add Task</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card">
                 <h2>Token Usage</h2>
                 <div class="metric">
                     <span class="metric-label">Today's Input:</span>
@@ -206,17 +291,24 @@
 
         <div class="grid">
             <div class="card">
-                <h2>Recent Errors</h2>
-                <ul class="error-list" id="error-list">
+                <h2>Pending Tasks</h2>
+                <ul class="task-list" id="task-list">
                     <li>Loading...</li>
                 </ul>
             </div>
 
             <div class="card">
-                <h2>Pending Tasks</h2>
-                <ul class="task-list" id="task-list">
+                <h2>Recent Errors</h2>
+                <ul class="error-list" id="error-list">
                     <li>Loading...</li>
                 </ul>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+            <h2>Recent Cycle Logs</h2>
+            <div id="logs-content">
+                <div>Loading...</div>
             </div>
         </div>
 
@@ -276,20 +368,85 @@
 
                 // Tasks
                 const tasksRes = await fetch('/api/tasks');
-                const tasks = await tasksRes.json();
+                const tasksData = await tasksRes.json();
+                const tasks = tasksData.tasks || [];
                 const taskList = document.getElementById('task-list');
                 if (tasks.length > 0) {
                     taskList.innerHTML = tasks.map(task =>
-                        `<li class="task-item">${task.id}: ${task.title}</li>`
+                        `<li class="task-item">#${task.id} [P${task.priority}] ${task.title}</li>`
                     ).join('');
                 } else {
                     taskList.innerHTML = '<li>No pending tasks</li>';
+                }
+
+                // Logs
+                const logsRes = await fetch('/api/logs');
+                const logsData = await logsRes.json();
+                const logs = logsData.logs || [];
+                const logsContent = document.getElementById('logs-content');
+                if (logs.length > 0) {
+                    logsContent.innerHTML = logs.map(log => {
+                        const success = log.success;
+                        const icon = success ? '✓' : '✗';
+                        const timestamp = formatTimestamp(log.timestamp);
+                        const mode = log.mode || 'unknown';
+                        const reason = log.reason || '';
+                        const summary = (log.summary || 'No summary').substring(0, 200);
+                        const cssClass = success ? '' : 'failed';
+
+                        return `
+                            <div class="log-detail ${cssClass}">
+                                <div class="log-header">
+                                    <span class="status-${success ? 'ok' : 'error'}">${icon} ${timestamp}</span>
+                                    <span class="timestamp">[${mode}]</span>
+                                </div>
+                                ${reason ? `<div class="log-reason">Reason: ${reason}</div>` : ''}
+                                <div class="log-summary">${summary}</div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    logsContent.innerHTML = '<div>No logs available</div>';
                 }
 
                 document.getElementById('last-update').textContent = new Date().toLocaleString();
 
             } catch (error) {
                 console.error('Failed to update status:', error);
+            }
+        }
+
+        async function addTask(event) {
+            event.preventDefault();
+
+            const title = document.getElementById('task-title').value;
+            const description = document.getElementById('task-description').value || title;
+            const priority = parseInt(document.getElementById('task-priority').value);
+
+            try {
+                const response = await fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ title, description, priority })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Clear form
+                    document.getElementById('task-title').value = '';
+                    document.getElementById('task-description').value = '';
+                    document.getElementById('task-priority').value = '5';
+
+                    // Refresh status
+                    updateStatus();
+                } else {
+                    alert('Error adding task: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error adding task: ' + error.message);
             }
         }
 

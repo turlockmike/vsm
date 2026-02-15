@@ -6,6 +6,9 @@ set -euo pipefail
 
 export PATH="$HOME/.local/bin:$HOME/.nvm/versions/node/$(ls $HOME/.nvm/versions/node/ 2>/dev/null | tail -1)/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
+# Export GitHub token for MCP server (from gh CLI auth)
+export GITHUB_TOKEN="$($HOME/.local/bin/gh auth token 2>/dev/null || echo '')"
+
 unset CLAUDECODE 2>/dev/null || true
 
 VSM_ROOT="$HOME/projects/vsm/main"

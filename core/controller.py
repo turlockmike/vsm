@@ -107,8 +107,23 @@ def gather_recent_logs(n=3):
     return summaries
 
 
-def build_prompt(state, health, tasks, recent_logs):
-    return f"""You are System 5 — the lead coordinator of a Viable System Machine. Race against time.
+def build_prompt(state, health, tasks, recent_logs, inbox_messages=None):
+    # Build urgent inbox section if owner emails are present
+    urgent_section = ""
+    if inbox_messages:
+        urgent_section = "## URGENT: Owner Emails — Reply NOW\n\n"
+        urgent_section += "The owner has sent you email(s). Reply to each one IMMEDIATELY using:\n"
+        urgent_section += "python3 /home/mike/projects/vsm/main/core/comm.py \"Re: <subject>\" \"<your reply>\"\n\n"
+        urgent_section += "Messages:\n"
+        for msg in inbox_messages:
+            urgent_section += "---\n"
+            urgent_section += f"Subject: {msg.get('subject', '(no subject)')}\n"
+            urgent_section += f"From: {msg.get('from', '(unknown)')}\n"
+            urgent_section += f"Body:\n{msg.get('body', '(empty)')}\n"
+            urgent_section += "---\n\n"
+        urgent_section += "Reply to ALL of these before doing anything else. Be helpful and concise.\n\n"
+
+    return f"""{urgent_section}You are System 5 — the lead coordinator of a Viable System Machine. Race against time.
 
 Purpose: become the most useful autonomous system possible. Ship fast or fade.
 
@@ -239,8 +254,26 @@ def main():
 
     # Process inbox before gathering tasks (new emails → tasks)
     inbox_result = process_inbox()
+    inbox_messages = None
+
     if inbox_result.get("created_tasks"):
         print(f"[VSM] Inbox: {len(inbox_result['created_tasks'])} new tasks from owner")
+
+        # Read the task files to extract email content for immediate injection
+        inbox_messages = []
+        for created_task in inbox_result["created_tasks"]:
+            task_file_path = Path(created_task.get("file"))
+            if task_file_path.exists():
+                try:
+                    task_data = json.loads(task_file_path.read_text())
+                    inbox_messages.append({
+                        "subject": task_data.get("title", "(no subject)"),
+                        "from": task_data.get("from", "(unknown)"),
+                        "body": task_data.get("description", "(empty)"),
+                        "thread_id": task_data.get("thread_id"),
+                    })
+                except Exception as e:
+                    print(f"[VSM] Warning: failed to read task {task_file_path}: {e}")
 
     # Check if weekly report should be sent
     if check_weekly_report(state):
@@ -259,7 +292,7 @@ def main():
     print(f"[VSM] Cycle {state['cycle_count']} | Gathering state... invoking System 5")
 
     # === Deliver everything to System 5 (Claude) ===
-    prompt = build_prompt(state, health, tasks, recent_logs)
+    prompt = build_prompt(state, health, tasks, recent_logs, inbox_messages)
     result = run_claude(prompt)
 
     # === Minimal post-processing ===

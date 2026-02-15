@@ -28,10 +28,10 @@ trap 'rm -f "$LOCKFILE"' EXIT
 cd "$VSM_ROOT"
 
 # Step 1: Sync inbox from API to filesystem (fast, no LLM)
-python3 core/maildir.py sync 2>&1 | head -10
+python3 core/maildir.py sync_inbox 2>&1 | head -10
 
 # Step 2: Process unread emails and write replies to outbox/
 python3 core/email_responder_v2.py 2>&1 | head -20
 
 # Step 3: Flush outbox — send any queued replies via API
-python3 core/maildir.py sync 2>&1 | head -10
+python3 core/maildir.py sync_outbox 2>&1 | head -10

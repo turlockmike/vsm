@@ -200,6 +200,25 @@ def mark_as_read(filepath):
     filepath.write_text(updated)
 
 
+def already_replied(thread_id):
+    """Check if we already sent a reply for this thread_id."""
+    OUTBOX_DIR.mkdir(parents=True, exist_ok=True)
+    SENT_DIR = VSM_ROOT / "sent"
+    SENT_DIR.mkdir(parents=True, exist_ok=True)
+
+    reply_filename = f"{thread_id}_reply.txt"
+
+    # Check if reply is queued in outbox
+    if (OUTBOX_DIR / reply_filename).exists():
+        return True
+
+    # Check if reply already sent
+    if (SENT_DIR / reply_filename).exists():
+        return True
+
+    return False
+
+
 def process_inbox():
     """Process all unread emails in inbox/ directory."""
     if not INBOX_DIR.exists():
@@ -226,6 +245,13 @@ def process_inbox():
         thread_id = email["thread_id"]
         sender = email["from"]
         sender_name = sender.split("<")[0].strip() if "<" in sender else sender
+
+        # Skip if we already replied to this thread
+        if already_replied(thread_id):
+            print(f"[email-responder-v2] Skipping (already replied): {subject}")
+            # Still mark as read locally to clean up inbox
+            mark_as_read(filepath)
+            continue
 
         print(f"[email-responder-v2] Processing: {subject}")
 

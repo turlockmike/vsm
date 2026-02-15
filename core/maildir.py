@@ -298,11 +298,20 @@ def main():
     """Main entry point for maildir sync daemon."""
     import sys
 
-    if len(sys.argv) > 1 and sys.argv[1] == "sync":
-        sync_inbox()
-        sync_outbox()
+    if len(sys.argv) > 1:
+        cmd = sys.argv[1]
+        if cmd == "sync":
+            sync_inbox()
+            sync_outbox()
+        elif cmd == "sync_inbox":
+            sync_inbox()
+        elif cmd == "sync_outbox":
+            sync_outbox()
+        else:
+            print("Usage: maildir.py [sync|sync_inbox|sync_outbox]")
+            sys.exit(1)
     else:
-        print("Usage: maildir.py sync")
+        print("Usage: maildir.py [sync|sync_inbox|sync_outbox]")
         sys.exit(1)
 
 

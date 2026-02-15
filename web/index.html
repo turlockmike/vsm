@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VSM - Viable System Machine</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -654,6 +655,25 @@
             </div>
         </div>
 
+        <div class="card" style="margin-bottom: 20px;">
+            <h2>Cost Trend (24h)</h2>
+            <div style="margin-bottom: 15px;">
+                <div class="metric">
+                    <span class="metric-label">24h Total:</span>
+                    <span class="metric-value" id="trend-total">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Avg Cost/Cycle:</span>
+                    <span class="metric-value" id="trend-avg-cost">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Avg Output Tokens:</span>
+                    <span class="metric-value" id="trend-avg-tokens">--</span>
+                </div>
+            </div>
+            <canvas id="cost-chart" style="max-height: 300px;"></canvas>
+        </div>
+
         <div class="grid">
             <div class="card">
                 <h2>MCP Tools</h2>
@@ -710,6 +730,7 @@
         let chatHistory = [];
         let previousValues = {};
         const startTime = Date.now();
+        let costChart = null;
 
         function formatNumber(num) {
             return num.toLocaleString();
@@ -1156,9 +1177,85 @@
             }
         }
 
+        async function updateCostTrend() {
+            try {
+                const res = await fetch('/api/cost_trend');
+                const data = await res.json();
+
+                // Update summary metrics
+                updateMetricValue('trend-total', '$' + data.summary.total_cost_24h.toFixed(4));
+                updateMetricValue('trend-avg-cost', '$' + data.summary.avg_cost_per_cycle.toFixed(4));
+                updateMetricValue('trend-avg-tokens', formatNumber(data.summary.avg_output_tokens));
+
+                // Prepare chart data
+                const cycles = data.cycles || [];
+                const labels = cycles.map(c => 'C' + c.cycle);
+                const costs = cycles.map(c => c.cost_usd);
+
+                // Create or update chart
+                const ctx = document.getElementById('cost-chart');
+                if (costChart) {
+                    costChart.destroy();
+                }
+
+                costChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Cost per Cycle ($)',
+                            data: costs,
+                            borderColor: '#00ff00',
+                            backgroundColor: 'rgba(0, 255, 0, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                labels: { color: '#00ff00', font: { family: 'Courier New' } }
+                            },
+                            tooltip: {
+                                backgroundColor: '#111',
+                                titleColor: '#00ff00',
+                                bodyColor: '#00ff00',
+                                borderColor: '#00ff00',
+                                borderWidth: 1,
+                                callbacks: {
+                                    label: function(context) {
+                                        return 'Cost: $' + context.parsed.y.toFixed(4);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { color: '#00ff00', font: { family: 'Courier New' } },
+                                grid: { color: '#333' }
+                            },
+                            x: {
+                                ticks: { color: '#00ff00', font: { family: 'Courier New' } },
+                                grid: { color: '#333' }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to load cost trend:', error);
+            }
+        }
+
         // Initialize
         updateStatus();
         updateMCP();
+        updateCostTrend();
         loadChatHistory();
         connectSSE();
 

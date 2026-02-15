@@ -52,6 +52,8 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.serve_chat_history()
         elif self.path == '/api/version':
             self.serve_version()
+        elif self.path == '/api/cost_trend':
+            self.serve_cost_trend()
         else:
             # Serve static files
             super().do_GET()
@@ -214,6 +216,74 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(version_info).encode())
         except Exception as e:
             self.send_error(500, f"Error reading version: {e}")
+
+    def serve_cost_trend(self):
+        """Serve cost trend data from cycle logs"""
+        try:
+            cycles = []
+            if LOGS_DIR.exists():
+                # Get cycle logs from last 24h
+                now = time.time()
+                cutoff = now - (24 * 3600)
+
+                cycle_files = sorted(
+                    [f for f in LOGS_DIR.glob("cycle_*.log")],
+                    key=os.path.getmtime
+                )
+
+                for log_file in cycle_files:
+                    # Skip if too old
+                    if os.path.getmtime(log_file) < cutoff:
+                        continue
+
+                    try:
+                        with open(log_file, 'r') as f:
+                            log_data = json.load(f)
+
+                        # Extract cost data
+                        cycle_num = log_data.get('cycle', 0)
+                        timestamp = log_data.get('timestamp', '')
+                        cost_usd = log_data.get('cost_usd', 0)
+
+                        # Try to extract token counts if available
+                        output_tokens = 0
+                        input_tokens = 0
+                        if 'metrics' in log_data:
+                            output_tokens = log_data['metrics'].get('output_tokens', 0)
+                            input_tokens = log_data['metrics'].get('input_tokens', 0)
+
+                        cycles.append({
+                            'cycle': cycle_num,
+                            'timestamp': timestamp,
+                            'cost_usd': cost_usd,
+                            'output_tokens': output_tokens,
+                            'input_tokens': input_tokens
+                        })
+                    except (json.JSONDecodeError, Exception) as e:
+                        continue
+
+            # Calculate summary stats
+            total_cost = sum(c['cost_usd'] for c in cycles)
+            avg_cost = total_cost / len(cycles) if cycles else 0
+            avg_output = sum(c['output_tokens'] for c in cycles) / len(cycles) if cycles else 0
+
+            result = {
+                'cycles': cycles,
+                'summary': {
+                    'total_cost_24h': round(total_cost, 4),
+                    'avg_cost_per_cycle': round(avg_cost, 4),
+                    'avg_output_tokens': int(avg_output),
+                    'cycle_count': len(cycles)
+                }
+            }
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+        except Exception as e:
+            self.send_error(500, f"Error reading cost trend: {e}")
 
     def serve_events(self):
         """Serve Server-Sent Events for state updates"""

@@ -1,0 +1,8 @@
+{
+  "id": "011",
+  "priority": 2,
+  "title": "Create a one-command installer",
+  "description": "Users should be able to install the VSM with a single command like 'curl -fsSL https://raw.githubusercontent.com/turlockmike/vsm/main/install.sh | bash'. The installer should: check prerequisites (python3, claude CLI with auth), clone the repo, set up the worktree structure, create the cron job, initialize state, send a welcome email. Make it dead simple.",
+  "created": "2026-02-14T16:40:00",
+  "status": "pending"
+}

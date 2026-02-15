@@ -1,0 +1,8 @@
+{
+  "id": "010",
+  "priority": 1,
+  "title": "Create a compelling GitHub README and push to turlockmike/vsm",
+  "description": "The repo needs a README that makes people want to install this. Explain what it is (an autonomous AI computer system built on Claude Code), what it does (self-maintains, self-improves, coordinates a team of AI agents, communicates via email), and how to install it (one-command setup). Look at popular repos for inspiration on README structure. Make it clear this is open source and early-stage. Push to GitHub.",
+  "created": "2026-02-14T16:40:00",
+  "status": "pending"
+}

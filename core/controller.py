@@ -190,6 +190,37 @@ def process_inbox():
         return {"error": str(e)}
 
 
+def check_weekly_report(state):
+    """Check if weekly status report should be sent (7+ days since last)."""
+    last_report = state.get("last_weekly_report")
+    if not last_report:
+        return True  # Never sent, send now
+
+    try:
+        last_report_dt = datetime.fromisoformat(last_report)
+        days_since = (datetime.now() - last_report_dt).days
+        return days_since >= 7
+    except Exception:
+        return False
+
+
+def send_weekly_report():
+    """Run weekly status report generator."""
+    try:
+        result = subprocess.run(
+            ["python3", str(VSM_ROOT / "sandbox" / "tools" / "weekly_status.py")],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=str(VSM_ROOT),
+        )
+        if result.returncode == 0:
+            return json.loads(result.stdout)
+        return {"sent": False, "error": result.stderr}
+    except Exception as e:
+        return {"sent": False, "error": str(e)}
+
+
 def main():
     # === Gather sensory input ===
     state = load_state()
@@ -200,6 +231,17 @@ def main():
     inbox_result = process_inbox()
     if inbox_result.get("created_tasks"):
         print(f"[VSM] Inbox: {len(inbox_result['created_tasks'])} new tasks from owner")
+
+    # Check if weekly report should be sent
+    if check_weekly_report(state):
+        print(f"[VSM] Sending weekly status report...")
+        report_result = send_weekly_report()
+        if report_result.get("sent"):
+            print(f"[VSM] Weekly report sent: {report_result.get('cycles_analyzed', 0)} cycles analyzed")
+            # State will be updated by weekly_status.py
+            state = load_state()  # Reload to get updated last_weekly_report
+        else:
+            print(f"[VSM] Weekly report failed: {report_result.get('error', 'unknown')}")
 
     tasks = gather_tasks()
     recent_logs = gather_recent_logs(n=3)

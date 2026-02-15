@@ -5,19 +5,37 @@ Provides the system's ability to reach out when it needs human intervention.
 """
 
 import json
+import os
 import requests
 from pathlib import Path
 
-API_KEY = "am_f645fe5d49c4ceb09695e7586e1456173d22205cd3ea2c0f70768da2ce1e69e1"
-BASE_URL = "https://api.agentmail.to/v0"
-OWNER_EMAIL = "michael.darmousseh@gmail.com"
+CONFIG_FILE = Path(__file__).parent.parent / ".env"
 STATE_DIR = Path(__file__).parent.parent / "state"
 INBOX_FILE = STATE_DIR / "inbox_id"
+BASE_URL = "https://api.agentmail.to/v0"
 
-HEADERS = {
-    "Authorization": f"Bearer {API_KEY}",
-    "Content-Type": "application/json",
-}
+
+def load_config():
+    """Load secrets from .env file (gitignored)."""
+    config = {}
+    if CONFIG_FILE.exists():
+        for line in CONFIG_FILE.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                config[key.strip()] = val.strip()
+    # Environment variables override file
+    config["AGENTMAIL_API_KEY"] = os.environ.get("AGENTMAIL_API_KEY", config.get("AGENTMAIL_API_KEY", ""))
+    config["OWNER_EMAIL"] = os.environ.get("VSM_OWNER_EMAIL", config.get("OWNER_EMAIL", ""))
+    return config
+
+
+def get_headers():
+    config = load_config()
+    return {
+        "Authorization": f"Bearer {config['AGENTMAIL_API_KEY']}",
+        "Content-Type": "application/json",
+    }
 
 
 def get_or_create_inbox():
@@ -28,7 +46,7 @@ def get_or_create_inbox():
 
     resp = requests.post(
         f"{BASE_URL}/inboxes",
-        headers=HEADERS,
+        headers=get_headers(),
         json={"display_name": "VSM Criticality Engine"},
     )
     resp.raise_for_status()
@@ -39,12 +57,13 @@ def get_or_create_inbox():
 
 def send_email(subject, body):
     """Send an email to the owner."""
+    config = load_config()
     inbox_id = get_or_create_inbox()
     resp = requests.post(
         f"{BASE_URL}/inboxes/{inbox_id}/messages/send",
-        headers=HEADERS,
+        headers=get_headers(),
         json={
-            "to": OWNER_EMAIL,
+            "to": config["OWNER_EMAIL"],
             "subject": f"[VSM] {subject}",
             "text": body,
         },

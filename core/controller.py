@@ -142,7 +142,7 @@ You are the coordinator. Don't do the work yourself — delegate and ship.
 """
 
 
-def run_claude(prompt, model="sonnet"):
+def run_claude(prompt, model="opus"):
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
 

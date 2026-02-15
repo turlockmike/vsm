@@ -41,7 +41,7 @@ You can also create NEW agents in .claude/agents/ when needed. Evolve the team.
 - Claude running non-interactively via `claude -p` from cron (every 5 min)
 - Working directory: ~/projects/vsm/main/
 - Full filesystem, internet, GitHub access (turlockmike account)
-- Email: `python3 core/comm.py "subject" "body"` → michael.darmousseh@gmail.com
+- Email: `python3 core/comm.py "subject" "body"` (owner address in .env)
 - Token budget: Claude Code Max, hourly cap. Be fast, not verbose.
 - Git repo with autopoietic governance: branch, test, merge or revert.
 

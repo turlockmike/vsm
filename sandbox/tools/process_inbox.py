@@ -14,17 +14,33 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent))
 from check_inbox import check_inbox, get_inbox_id
 
-API_KEY = "am_f645fe5d49c4ceb09695e7586e1456173d22205cd3ea2c0f70768da2ce1e69e1"
 BASE_URL = "https://api.agentmail.to/v0"
-OWNER_EMAIL = "michael.darmousseh@gmail.com"
 TASKS_DIR = Path(__file__).parent.parent / "tasks"
 STATE_DIR = Path(__file__).parent.parent.parent / "state"
+CONFIG_FILE = Path(__file__).parent.parent.parent / ".env"
 PROCESSED_FILE = STATE_DIR / "processed_threads.json"
 
-HEADERS = {
-    "Authorization": f"Bearer {API_KEY}",
-    "Content-Type": "application/json",
-}
+
+def _load_config():
+    import os
+    config = {}
+    if CONFIG_FILE.exists():
+        for line in CONFIG_FILE.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                config[key.strip()] = val.strip()
+    config["AGENTMAIL_API_KEY"] = os.environ.get("AGENTMAIL_API_KEY", config.get("AGENTMAIL_API_KEY", ""))
+    config["OWNER_EMAIL"] = os.environ.get("VSM_OWNER_EMAIL", config.get("OWNER_EMAIL", ""))
+    return config
+
+
+def _get_headers():
+    config = _load_config()
+    return {
+        "Authorization": f"Bearer {config['AGENTMAIL_API_KEY']}",
+        "Content-Type": "application/json",
+    }
 
 
 def load_processed_threads():
@@ -69,7 +85,7 @@ def add_label_to_message(inbox_id, message_id, label):
     """Add a label to a message via API."""
     resp = requests.patch(
         f"{BASE_URL}/inboxes/{inbox_id}/messages/{message_id}",
-        headers=HEADERS,
+        headers=_get_headers(),
         json={"add_labels": [label]}
     )
     resp.raise_for_status()
@@ -158,7 +174,8 @@ def process_inbox():
             first_msg = messages[0]
             sender = first_msg.get("from", "")
 
-            if OWNER_EMAIL not in sender:
+            owner_email = _load_config()["OWNER_EMAIL"]
+            if owner_email not in sender:
                 # Not from owner, mark as processed but don't create task
                 save_processed_thread(thread_id)
                 result["skipped"] += 1

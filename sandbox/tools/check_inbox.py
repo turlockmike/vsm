@@ -9,15 +9,27 @@ import requests
 from pathlib import Path
 import sys
 
-API_KEY = "am_f645fe5d49c4ceb09695e7586e1456173d22205cd3ea2c0f70768da2ce1e69e1"
 BASE_URL = "https://api.agentmail.to/v0"
 STATE_DIR = Path(__file__).parent.parent.parent / "state"
 INBOX_FILE = STATE_DIR / "inbox_id"
+CONFIG_FILE = Path(__file__).parent.parent.parent / ".env"
 
-HEADERS = {
-    "Authorization": f"Bearer {API_KEY}",
-    "Content-Type": "application/json",
-}
+
+def _load_api_key():
+    import os
+    key = os.environ.get("AGENTMAIL_API_KEY", "")
+    if not key and CONFIG_FILE.exists():
+        for line in CONFIG_FILE.read_text().splitlines():
+            if line.startswith("AGENTMAIL_API_KEY="):
+                key = line.split("=", 1)[1].strip()
+    return key
+
+
+def _get_headers():
+    return {
+        "Authorization": f"Bearer {_load_api_key()}",
+        "Content-Type": "application/json",
+    }
 
 
 def get_inbox_id():
@@ -35,7 +47,7 @@ def list_threads(inbox_id, labels=None, limit=50):
 
     resp = requests.get(
         f"{BASE_URL}/inboxes/{inbox_id}/threads",
-        headers=HEADERS,
+        headers=_get_headers(),
         params=params,
     )
     resp.raise_for_status()
@@ -46,7 +58,7 @@ def get_thread(inbox_id, thread_id):
     """Get a specific thread with all its messages."""
     resp = requests.get(
         f"{BASE_URL}/inboxes/{inbox_id}/threads/{thread_id}",
-        headers=HEADERS,
+        headers=_get_headers(),
     )
     resp.raise_for_status()
     return resp.json()

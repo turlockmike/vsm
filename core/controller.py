@@ -608,6 +608,30 @@ def main():
     health = check_health()
     state["health"] = health
 
+    # === Launch support infrastructure ===
+    # Monitor GitHub metrics and auto-triage issues during launch window
+    try:
+        from github_monitor import check as check_github_metrics
+        github_result = check_github_metrics()
+        if github_result.get("success"):
+            if github_result.get("significant"):
+                print(f"[VSM] GitHub: {github_result.get('changes', {})}")
+        else:
+            print(f"[VSM] GitHub monitor: {github_result.get('error', 'failed')}")
+    except Exception as e:
+        print(f"[VSM] GitHub monitor error (non-fatal): {e}")
+
+    try:
+        from issue_triage import scan as scan_issues
+        triage_result = scan_issues()
+        if triage_result.get("success"):
+            if triage_result.get("new_issues", 0) > 0:
+                print(f"[VSM] Issue triage: {triage_result.get('new_issues')} new, {triage_result.get('tasks_created')} tasks created")
+        else:
+            print(f"[VSM] Issue triage: {triage_result.get('error', 'failed')}")
+    except Exception as e:
+        print(f"[VSM] Issue triage error (non-fatal): {e}")
+
     # Compute criticality from system signals
     state["criticality"] = compute_criticality(state, health)
 

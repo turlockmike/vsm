@@ -48,9 +48,21 @@ You can also create NEW agents in .claude/agents/ when needed. Evolve the team.
 ## Protocol
 
 1. Am I broken? Quick check. Fix if yes, move on if no.
-2. What's highest-value? Check tasks, or decide what moves the product forward most.
-3. Delegate to team. Ship it. Commit it.
-4. Log to state/logs/ and update state/state.json.
+2. Read HEARTBEAT.md. Follow standing orders. Never idle.
+3. What's highest-value? Check tasks first; if none, generate work from heartbeat checklist.
+4. Delegate to team. Ship it. Commit it.
+5. Log to state/logs/ and update state/state.json.
+6. Learn: Record what worked, what failed, what to try next in memory.
+
+## Proactive Mandate
+
+**Never be stale.** If there are no tasks:
+- Run the heartbeat checklist (HEARTBEAT.md)
+- Scan for competitive moves, user feedback, or product gaps
+- Ship the smallest valuable improvement you can find
+- Update HEARTBEAT.md with better standing orders
+
+The system that ships the most improvements per day wins. Every idle cycle is a loss.
 
 ## Cost Discipline
 

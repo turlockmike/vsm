@@ -251,6 +251,16 @@ def _slim_state(state):
     }
 
 
+def load_heartbeat():
+    """Load HEARTBEAT.md — standing orders that keep VSM proactive."""
+    heartbeat_file = VSM_ROOT / "HEARTBEAT.md"
+    if heartbeat_file.exists():
+        content = heartbeat_file.read_text().strip()
+        if content:
+            return content
+    return ""
+
+
 def build_prompt(state, health, tasks, recent_logs, inbox_messages=None):
     # Email replies are handled by email_responder_v2.py (every 1 min via cron).
     # Inbox messages here are read-only context for task prioritization.
@@ -274,6 +284,12 @@ def build_prompt(state, health, tasks, recent_logs, inbox_messages=None):
     if observations:
         memory_section += f"## Recent Observations\n{observations}\n\n"
 
+    # Load heartbeat — standing orders for proactive behavior
+    heartbeat = load_heartbeat()
+    heartbeat_section = ""
+    if heartbeat:
+        heartbeat_section = f"## Heartbeat (Standing Orders)\n\n{heartbeat}\n\n"
+
     slim = _slim_state(state)
     # Only include health fields that matter for decisions
     compact_health = {
@@ -292,7 +308,10 @@ def build_prompt(state, health, tasks, recent_logs, inbox_messages=None):
     if today_cost or total_cost:
         cost_line = f"\nCost: today=${today_cost:.2f} total=${total_cost:.2f} | Prefer sonnet for routine tasks, opus for complex reasoning."
 
-    return f"""{context_section}{memory_section}## Situation
+    # When no tasks exist, heartbeat drives proactive work
+    task_instruction = "Pick highest-value actionable task." if tasks else "No tasks queued. Follow HEARTBEAT.md standing orders — find and ship the highest-value improvement."
+
+    return f"""{context_section}{heartbeat_section}{memory_section}## Situation
 State: {json.dumps(slim)}
 Health: {json.dumps(compact_health)}
 Tasks: {json.dumps(tasks) if tasks else "None"}
@@ -300,7 +319,7 @@ Recent: {json.dumps(recent_logs) if recent_logs else "None"}
 
 Criticality: 0.0=chaos(stabilize!) 0.5=viable(ship!) 1.0=stagnant(shake things up!){cost_line}
 
-Pick highest-value actionable task. Delegate to builder (sonnet) or researcher (haiku) via Task tool. Log to state/logs/. Commit before finishing.
+{task_instruction} Delegate to builder (sonnet) or researcher (haiku) via Task tool. Log to state/logs/. Commit before finishing.
 
 Memory: Use `from core.memory import append_to_memory` to record new learnings (decisions, preferences, project changes).
 """
@@ -627,14 +646,16 @@ def main():
     state["health"] = health
 
     # === Idle cycle detection ===
-    # Skip Claude invocation when there's nothing actionable.
-    # Saves ~$0.50-1.00 per idle cycle (owner's #1 pain point: cost).
+    # Skip Claude invocation when there's nothing actionable AND no heartbeat.
+    # HEARTBEAT.md provides standing orders so VSM stays proactive even without tasks.
     tasks = gather_tasks()
     has_new_mail = _has_new_inbox(state)
-    if not tasks and not has_new_mail:
+    heartbeat_file = VSM_ROOT / "HEARTBEAT.md"
+    has_heartbeat = heartbeat_file.exists()
+    if not tasks and not has_new_mail and not has_heartbeat:
         state["criticality"] = compute_criticality(state, health)
         save_state(state)
-        print(f"[VSM] Idle skip: no tasks, no new mail. Criticality={state['criticality']}")
+        print(f"[VSM] Idle skip: no tasks, no new mail, no heartbeat. Criticality={state['criticality']}")
         return
 
     # === Launch support infrastructure ===

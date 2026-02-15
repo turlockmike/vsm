@@ -226,7 +226,7 @@ def run_claude(prompt, model="opus"):
             "error": result.stderr[:1000] if result.returncode != 0 else None,
         }
     except subprocess.TimeoutExpired:
-        return {"success": False, "output": "", "error": "Timeout (120s)"}
+        return {"success": False, "output": "", "error": "Timeout (300s)"}
     except Exception as e:
         return {"success": False, "output": "", "error": str(e)}
 
@@ -361,6 +361,12 @@ def main():
             except Exception:
                 pass
     else:
+        # Increment cycle count on success
+        state["cycle_count"] = state.get("cycle_count", 0) + 1
+        state["last_result_success"] = True
+        state["health"] = health
+        save_state(state)
+
         # Extract a brief summary from output for observation memory
         output_preview = result["output"][:300].replace("\n", " ").strip()
         if output_preview:

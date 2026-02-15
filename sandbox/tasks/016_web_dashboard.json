@@ -1,0 +1,8 @@
+{
+  "id": "016",
+  "priority": 1,
+  "title": "Build a local web dashboard",
+  "description": "Create a simple web dashboard that shows system status, task queue, and recent logs in a browser. Use Python's built-in http.server or a minimal framework (no npm/webpack). Command: 'vsm dashboard' starts it on localhost:7777. Show: system health, task list with add/complete, cycle log timeline, and a text box to add new tasks. This makes the system feel real and usable. Keep it to a single HTML file served by Python.",
+  "created": "2026-02-15T01:06:00",
+  "status": "pending"
+}

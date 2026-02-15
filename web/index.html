@@ -265,7 +265,15 @@
             </div>
 
             <div class="card">
-                <h2>Token Usage</h2>
+                <h2>Token Usage & Cost</h2>
+                <div class="metric">
+                    <span class="metric-label">Today's Cost:</span>
+                    <span class="metric-value" id="today-cost">--</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Total Cost:</span>
+                    <span class="metric-value" id="total-cost">--</span>
+                </div>
                 <div class="metric">
                     <span class="metric-label">Today's Input:</span>
                     <span class="metric-value" id="token-input">--</span>
@@ -275,16 +283,12 @@
                     <span class="metric-value" id="token-output">--</span>
                 </div>
                 <div class="metric">
-                    <span class="metric-label">Daily Cap:</span>
-                    <span class="metric-value" id="token-cap">--</span>
+                    <span class="metric-label">Last Cycle Cost:</span>
+                    <span class="metric-value" id="last-cycle-cost">--</span>
                 </div>
                 <div class="metric">
-                    <span class="metric-label">Avg Input/Cycle:</span>
-                    <span class="metric-value" id="avg-input">--</span>
-                </div>
-                <div class="metric">
-                    <span class="metric-label">Avg Output/Cycle:</span>
-                    <span class="metric-value" id="avg-output">--</span>
+                    <span class="metric-label">Cycles Tracked:</span>
+                    <span class="metric-value" id="cycles-tracked">--</span>
                 </div>
             </div>
         </div>
@@ -349,12 +353,16 @@
                 document.getElementById('cron-status').textContent = state.health.cron_installed ? 'ACTIVE' : 'INACTIVE';
                 document.getElementById('log-size').textContent = state.health.log_size_mb.toFixed(2) + ' MB';
 
-                // Token Usage
+                // Token Usage & Cost
+                const todayCost = state.token_budget.today_cost_usd || 0;
+                const totalCost = state.token_usage.total_cost_usd || 0;
+                const lastCycleCost = state.token_usage.last_cycle_cost_usd || 0;
+                document.getElementById('today-cost').textContent = '$' + todayCost.toFixed(4);
+                document.getElementById('total-cost').textContent = '$' + totalCost.toFixed(4);
                 document.getElementById('token-input').textContent = formatNumber(state.token_budget.today_input);
                 document.getElementById('token-output').textContent = formatNumber(state.token_budget.today_output);
-                document.getElementById('token-cap').textContent = formatNumber(state.token_budget.daily_soft_cap);
-                document.getElementById('avg-input').textContent = formatNumber(state.token_usage.avg_input_per_cycle);
-                document.getElementById('avg-output').textContent = formatNumber(state.token_usage.avg_output_per_cycle);
+                document.getElementById('last-cycle-cost').textContent = '$' + lastCycleCost.toFixed(4);
+                document.getElementById('cycles-tracked').textContent = state.token_usage.cycles_tracked || 0;
 
                 // Recent Errors
                 const errorList = document.getElementById('error-list');

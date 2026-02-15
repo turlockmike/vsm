@@ -1,0 +1,9 @@
+{
+  "id": "023",
+  "title": "Ship a compelling GitHub README",
+  "description": "The README is the front door. It needs to instantly communicate what VSM is, show a demo/screenshot, explain how to install in one command, and make someone want to try it. Reference install.sh, the dashboard, and the mission. Include architecture diagram (ASCII). This is the #1 thing that converts visitors to users.",
+  "priority": 4,
+  "source": "system-5",
+  "created": "2026-02-15T03:30:00Z",
+  "status": "pending"
+}

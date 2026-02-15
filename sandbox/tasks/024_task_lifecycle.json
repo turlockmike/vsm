@@ -1,0 +1,9 @@
+{
+  "id": "024",
+  "title": "Task lifecycle: auto-archive completed tasks",
+  "description": "Completed tasks should be automatically moved to sandbox/tasks/archive/ by the controller after each cycle. This prevents prompt bloat and keeps the active queue clean. Already started manually — now automate it in controller.py gather_tasks() or in main() post-processing.",
+  "priority": 5,
+  "source": "system-5",
+  "created": "2026-02-15T03:30:00Z",
+  "status": "completed"
+}

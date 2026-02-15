@@ -119,15 +119,35 @@ def check_health():
     return health
 
 
+def archive_completed_tasks():
+    """Move completed tasks to archive/ directory. Keeps active queue clean."""
+    if not TASKS_DIR.exists():
+        return 0
+    archive_dir = TASKS_DIR / "archive"
+    archive_dir.mkdir(exist_ok=True)
+    archived = 0
+    for f in TASKS_DIR.glob("*.json"):
+        try:
+            task = json.loads(f.read_text())
+            if task.get("status") == "completed":
+                f.rename(archive_dir / f.name)
+                archived += 1
+        except Exception:
+            pass
+    return archived
+
+
 def gather_tasks():
-    """Load tasks, filtering out blocked ones to save prompt tokens."""
+    """Load tasks, filtering out blocked/completed ones to save prompt tokens."""
     tasks = []
     if TASKS_DIR.exists():
         for f in sorted(TASKS_DIR.glob("*.json")):
+            if f.parent.name == "archive":
+                continue
             try:
                 task = json.loads(f.read_text())
-                # Skip blocked tasks — they can't be acted on this cycle
-                if task.get("status") == "blocked":
+                # Skip blocked/completed tasks — they can't be acted on this cycle
+                if task.get("status") in ("blocked", "completed"):
                     continue
                 # Slim down: only include fields System 5 needs
                 slim = {
@@ -252,33 +272,46 @@ def build_prompt(state, health, tasks, recent_logs, inbox_messages=None):
         "cron": health.get("cron_installed", False),
     }
 
+    # Cost awareness — let System 5 see today's spend
+    budget = state.get("token_budget", {})
+    usage = state.get("token_usage", {})
+    cost_line = ""
+    today_cost = budget.get("today_cost_usd", 0)
+    total_cost = usage.get("total_cost_usd", 0)
+    if today_cost or total_cost:
+        cost_line = f"\nCost: today=${today_cost:.2f} total=${total_cost:.2f} | Prefer sonnet for routine tasks, opus for complex reasoning."
+
     return f"""{context_section}{memory_section}## Situation
 State: {json.dumps(slim)}
 Health: {json.dumps(compact_health)}
 Tasks: {json.dumps(tasks) if tasks else "None"}
 Recent: {json.dumps(recent_logs) if recent_logs else "None"}
 
-Criticality: 0.0=chaos(stabilize!) 0.5=viable(ship!) 1.0=stagnant(shake things up!)
+Criticality: 0.0=chaos(stabilize!) 0.5=viable(ship!) 1.0=stagnant(shake things up!){cost_line}
 
 Pick highest-value actionable task. Delegate to builder (sonnet) or researcher (haiku) via Task tool. Log to state/logs/. Commit before finishing.
 """
 
 
-def parse_token_usage(output_text):
-    """
-    Parse token usage from Claude Code output.
-    Returns dict with input_tokens and output_tokens, or None if not found.
-
-    For now, uses output length as a proxy since Claude Code doesn't expose
-    token counts in a parseable format via -p flag.
-    """
-    # Proxy: ~4 chars per token (rough estimate)
-    output_tokens_estimate = len(output_text) // 4
-    # Input token estimation would need the prompt length
-    return {
-        "output_tokens": output_tokens_estimate,
-        "input_tokens": 0,  # Can't measure without prompt visibility
-    }
+def parse_json_result(json_output):
+    """Parse claude --output-format json result for token usage and cost."""
+    try:
+        data = json.loads(json_output)
+        usage = data.get("usage", {})
+        return {
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+            "cache_creation_tokens": usage.get("cache_creation_input_tokens", 0),
+            "cache_read_tokens": usage.get("cache_read_input_tokens", 0),
+            "cost_usd": data.get("total_cost_usd", 0),
+            "duration_ms": data.get("duration_ms", 0),
+            "num_turns": data.get("num_turns", 0),
+            "result_text": data.get("result", ""),
+            "is_error": data.get("is_error", False),
+            "success": data.get("subtype") == "success",
+        }
+    except (json.JSONDecodeError, TypeError):
+        return None
 
 
 def _recent_failure_count(state):
@@ -406,6 +439,7 @@ def run_claude(prompt, model="opus", timeout=300):
         CLAUDE_BIN,
         "-p", prompt,
         "--model", model,
+        "--output-format", "json",
         "--dangerously-skip-permissions",
         "--append-system-prompt", autonomy_prompt,
     ]
@@ -421,15 +455,33 @@ def run_claude(prompt, model="opus", timeout=300):
         )
 
         output = result.stdout
-        token_usage = parse_token_usage(output)
+        parsed = parse_json_result(output)
 
-        return {
-            "success": result.returncode == 0,
-            "output": output[:4000],
-            "error": result.stderr[:1000] if result.returncode != 0 else None,
-            "model": model,
-            "token_usage": token_usage,
-        }
+        if parsed:
+            return {
+                "success": parsed["success"] and not parsed["is_error"],
+                "output": parsed["result_text"][:4000],
+                "error": parsed["result_text"][:1000] if parsed["is_error"] else None,
+                "model": model,
+                "token_usage": {
+                    "input_tokens": parsed["input_tokens"],
+                    "output_tokens": parsed["output_tokens"],
+                    "cache_creation_tokens": parsed["cache_creation_tokens"],
+                    "cache_read_tokens": parsed["cache_read_tokens"],
+                    "cost_usd": parsed["cost_usd"],
+                },
+                "duration_ms": parsed["duration_ms"],
+                "num_turns": parsed["num_turns"],
+            }
+        else:
+            # Fallback: JSON parsing failed, treat as plain text
+            return {
+                "success": result.returncode == 0,
+                "output": output[:4000],
+                "error": result.stderr[:1000] if result.returncode != 0 else None,
+                "model": model,
+                "token_usage": {"input_tokens": 0, "output_tokens": 0},
+            }
     except subprocess.TimeoutExpired:
         return {"success": False, "output": "", "error": f"Timeout ({timeout}s)", "model": model}
     except Exception as e:
@@ -556,17 +608,29 @@ def main():
         else:
             print(f"[VSM] Weekly report failed: {report_result.get('error', 'unknown')}")
 
+    # Auto-archive completed tasks before gathering
+    archived = archive_completed_tasks()
+    if archived:
+        print(f"[VSM] Archived {archived} completed task(s)")
+
     tasks = gather_tasks()
     recent_logs = gather_recent_logs(n=3)
 
     # Model selection: downgrade to sonnet after 3+ consecutive failures
+    # or when daily cost exceeds threshold
     failures = _recent_failure_count(state)
-    model = "sonnet" if failures >= 3 else "opus"
+    budget = state.get("token_budget", {})
+    today_cost = budget.get("today_cost_usd", 0)
+    cost_downgrade = today_cost > 5.0  # Downgrade to sonnet after $5/day
+
+    model = "sonnet" if (failures >= 3 or cost_downgrade) else "opus"
     # Increase timeout for retry attempts (up to 600s max)
     timeout = min(300 + (failures * 60), 600)
 
     if failures > 0:
         print(f"[VSM] Recovery mode: {failures} recent failures, using model={model}, timeout={timeout}s")
+    if cost_downgrade:
+        print(f"[VSM] Cost cap: today=${today_cost:.2f}, downgrading to sonnet")
 
     print(f"[VSM] Cycle {state['cycle_count']} | Gathering state... invoking System 5")
 
@@ -574,25 +638,33 @@ def main():
     prompt = build_prompt(state, health, tasks, recent_logs, inbox_messages)
     result = run_claude(prompt, model=model, timeout=timeout)
 
-    # Track token usage
+    # Track token usage (now with real data from --output-format json)
     if result.get("token_usage"):
         tokens = result["token_usage"]
         usage = state.setdefault("token_usage", {
             "total_input_tokens": 0,
             "total_output_tokens": 0,
+            "total_cache_creation": 0,
+            "total_cache_read": 0,
+            "total_cost_usd": 0.0,
             "cycles_tracked": 0,
             "avg_input_per_cycle": 0,
             "avg_output_per_cycle": 0,
             "last_cycle_input": 0,
             "last_cycle_output": 0,
+            "last_cycle_cost_usd": 0.0,
         })
 
         # Update totals
         usage["total_input_tokens"] += tokens.get("input_tokens", 0)
         usage["total_output_tokens"] += tokens.get("output_tokens", 0)
+        usage["total_cache_creation"] = usage.get("total_cache_creation", 0) + tokens.get("cache_creation_tokens", 0)
+        usage["total_cache_read"] = usage.get("total_cache_read", 0) + tokens.get("cache_read_tokens", 0)
+        usage["total_cost_usd"] = round(usage.get("total_cost_usd", 0) + tokens.get("cost_usd", 0), 4)
         usage["cycles_tracked"] += 1
         usage["last_cycle_input"] = tokens.get("input_tokens", 0)
         usage["last_cycle_output"] = tokens.get("output_tokens", 0)
+        usage["last_cycle_cost_usd"] = tokens.get("cost_usd", 0)
 
         # Update averages
         if usage["cycles_tracked"] > 0:
@@ -605,6 +677,7 @@ def main():
             "today": datetime.now().date().isoformat(),
             "today_input": 0,
             "today_output": 0,
+            "today_cost_usd": 0.0,
         })
 
         today = datetime.now().date().isoformat()
@@ -613,9 +686,11 @@ def main():
             budget["today"] = today
             budget["today_input"] = 0
             budget["today_output"] = 0
+            budget["today_cost_usd"] = 0.0
 
         budget["today_input"] += tokens.get("input_tokens", 0)
         budget["today_output"] += tokens.get("output_tokens", 0)
+        budget["today_cost_usd"] = round(budget.get("today_cost_usd", 0) + tokens.get("cost_usd", 0), 4)
 
     # === Minimal post-processing ===
     # The controller does NOT interpret the result or update state —
@@ -665,11 +740,12 @@ def main():
             except Exception:
                 pass
 
-        # Log token usage if available
+        # Log token usage
         token_info = ""
         if result.get("token_usage"):
             tokens = result["token_usage"]
-            token_info = f" | Tokens (est): out={tokens.get('output_tokens', 0)}"
+            cost = tokens.get("cost_usd", 0)
+            token_info = f" | in={tokens.get('input_tokens', 0)} out={tokens.get('output_tokens', 0)} ${cost:.4f}"
 
         print(f"[VSM] System 5 completed cycle{token_info}. Output preview:")
         print(result["output"][:500])

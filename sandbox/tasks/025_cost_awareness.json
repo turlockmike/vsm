@@ -1,0 +1,9 @@
+{
+  "id": "025",
+  "title": "Cost-aware cycle decisions",
+  "description": "Now that we track real cost per cycle via --output-format json, add cost awareness to the control loop: (1) Include today's cost in the System 5 prompt so it can make cost-conscious decisions, (2) Add cost thresholds that trigger model downgrade (opus->sonnet) or cycle skip when daily spend is high, (3) Show cost in hourly reports. Owner said tokens are #1 cost constraint.",
+  "priority": 5,
+  "source": "owner-directive",
+  "created": "2026-02-15T03:30:00Z",
+  "status": "completed"
+}

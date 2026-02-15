@@ -64,14 +64,43 @@ The AI agent landscape is crowded. But most tools fall into one of these categor
 
 ## Quick Start
 
+**Prerequisites:** Python 3.x, Git, Node.js/npm, Claude Code CLI
+
+Install VSM with one command:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/turlockmike/vsm/main/install.sh | bash
 ```
+
+The installer will:
+- Check system compatibility (Linux/macOS)
+- Install Claude Code CLI if needed (`npm install -g @anthropic-ai/claude-code`)
+- Clone VSM repository to `~/vsm` (or custom path via `VSM_DIR` env var)
+- Create directory structure (`state/`, `sandbox/tasks/`)
+- Prompt you to create `.env` file with API keys
+- Install `vsm` CLI to `~/.local/bin`
+- Set up cron job (runs every 5 minutes)
 
 After installation, verify:
 
 ```bash
 vsm status
+```
+
+**Next steps:**
+
+```bash
+# Add a task
+vsm task add "Say hello"
+
+# View logs
+vsm logs
+
+# Open dashboard
+vsm dashboard
+
+# Manual test run
+vsm run
 ```
 
 ## Security Notice
@@ -165,7 +194,7 @@ VSM implements Stafford Beer's **Viable System Model** — a cybernetics theory 
 
 **File-based communication** is key: Agents communicate through JSON files and git commits. Zero tokens spent on API calls between agents. The filesystem IS the interface.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full technical design.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full technical design.
 
 ## Use Cases
 
@@ -181,7 +210,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full technical design.
 
 5. **System monitoring** — VSM tracks its own health metrics, API costs, error rates, and performance. When thresholds are exceeded, it alerts you via email and takes corrective action (backoff, model downgrade, self-repair).
 
-See [EXAMPLES.md](EXAMPLES.md) for real cycle logs and walkthroughs.
+See [docs/EXAMPLES.md](docs/EXAMPLES.md) for real cycle logs and walkthroughs.
 
 ## CLI Reference
 

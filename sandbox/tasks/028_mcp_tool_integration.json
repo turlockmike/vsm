@@ -1,0 +1,8 @@
+{
+  "id": "028",
+  "title": "MCP tool integration layer",
+  "description": "VSM currently has no tool integrations beyond email and filesystem. OpenClaw ships 100+ integrations (GitHub, Slack, Google Workspace, databases). VSM should leverage Model Context Protocol (MCP) to add tool integrations without custom API wrappers. Priority targets: GitHub (issues, PRs, repo management), calendar, and web browsing. MCP is already the industry standard — Claude Code natively supports it. Add MCP server configs to .claude/settings.json.",
+  "priority": 7,
+  "source": "competitive-analysis",
+  "created_at": "2026-02-15T03:30:00"
+}

@@ -203,35 +203,35 @@ echo -e "\n${BLUE}[7/8]${NC} Environment configuration..."
 if [ -f ".env" ]; then
     echo -e "${WARN} .env file already exists, not overwriting"
 else
-    echo -e "${YELLOW}"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo " REQUIRED: Create your .env file"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${NC}"
-    echo "VSM needs an .env file with the following variables:"
-    echo ""
-    echo "1. AGENTMAIL_API_KEY — Get your API key from:"
-    echo "   https://agentmail.to/"
-    echo ""
-    echo "2. OWNER_EMAIL — Your email address for system notifications"
-    echo ""
-    echo -e "${YELLOW}Create this file now:${NC}"
-    echo "  cd $VSM_DIR"
-    echo "  nano .env"
-    echo ""
-    echo "Add these lines (replace with your actual values):"
-    echo "  AGENTMAIL_API_KEY=your_api_key_here"
-    echo "  OWNER_EMAIL=your.email@example.com"
-    echo ""
-    read -p "Press Enter when you've created the .env file... " -r
-    echo
+    # Auto-copy template to .env
+    if [ -f ".env.template" ]; then
+        cp .env.template .env
+        echo -e "${CHECK} Created .env from template"
+        echo ""
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${YELLOW} REQUIRED: Edit .env file with your credentials${NC}"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo "1. ANTHROPIC_API_KEY — Get from: https://console.anthropic.com/"
+        echo "2. OWNER_EMAIL — Your email address for notifications"
+        echo "3. AGENTMAIL_API_KEY (optional) — Get from: https://agentmail.org/"
+        echo ""
+        echo -e "${YELLOW}Edit now:${NC}"
+        echo "  nano $VSM_DIR/.env"
+        echo ""
+        read -p "Press Enter when you've configured .env... " -r
+        echo
 
-    if [ ! -f ".env" ]; then
-        echo -e "${CROSS} .env file not found. VSM will not work without it."
-        echo -e "   Please create it before continuing."
-        exit 1
+        # Verify required fields are filled
+        if grep -q "your_api_key_here" .env || grep -q "your.email@example.com" .env; then
+            echo -e "${WARN} .env still contains placeholder values"
+            echo -e "   Please update ANTHROPIC_API_KEY and OWNER_EMAIL before running VSM"
+        else
+            echo -e "${CHECK} .env configured"
+        fi
     else
-        echo -e "${CHECK} .env file detected"
+        echo -e "${CROSS} .env.template not found. Cannot create .env automatically."
+        exit 1
     fi
 fi
 

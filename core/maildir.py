@@ -262,6 +262,7 @@ def sync_outbox():
 
     inbox_id = get_inbox_id()
     sent_count = 0
+    skipped_count = 0
 
     SENT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -272,6 +273,7 @@ def sync_outbox():
             if sent_file.exists():
                 print(f"[maildir] Skipping (already sent): {outfile.name}")
                 outfile.unlink()  # Remove duplicate from outbox
+                skipped_count += 1
                 continue
 
             content = outfile.read_text()
@@ -306,9 +308,41 @@ def sync_outbox():
                 print(f"[maildir] Skipping malformed outbox file: {outfile.name}")
                 continue
 
+            # ATOMIC DEDUPLICATION: Check API thread history BEFORE sending
+            # This prevents race condition where multiple outbox files exist for same thread
+            try:
+                thread = get_thread_messages(inbox_id, thread_id)
+                messages = thread.get("messages", [])
+                inbox_addr = inbox_id.split("@")[0] if "@" in inbox_id else inbox_id
+
+                # Check if any message from our inbox exists (we already replied)
+                already_replied = False
+                for msg in messages:
+                    if inbox_addr in msg.get("from", "") or inbox_id in msg.get("from", ""):
+                        already_replied = True
+                        break
+
+                if already_replied:
+                    print(f"[maildir] DUPLICATE DETECTED: Thread {thread_id[:8]}... already has our reply (API check)")
+                    # Move to sent/ without sending (it's a duplicate)
+                    outfile.rename(sent_file)
+                    skipped_count += 1
+                    continue
+
+            except Exception as e:
+                print(f"[maildir] Warning: Could not check thread history for {thread_id[:8]}...: {e}")
+                # Continue anyway - better to risk duplicate than miss a reply
+
             # Send via API (with logging)
             print(f"[maildir] Sending via API: {outfile.name} (thread {thread_id[:8]}...)")
-            send_reply(inbox_id, thread_id, to_email, subject or "(no subject)", body)
+            result = send_reply(inbox_id, thread_id, to_email, subject or "(no subject)", body)
+
+            # Check if send_reply detected duplicate (secondary check)
+            if result and result.get("status") == "already_sent":
+                print(f"[maildir] Detected duplicate during send, moving to sent/ without API call")
+                outfile.rename(sent_file)
+                skipped_count += 1
+                continue
 
             # Move to sent/
             outfile.rename(sent_file)
@@ -322,6 +356,8 @@ def sync_outbox():
 
     if sent_count > 0:
         print(f"[maildir] Sent {sent_count} email(s)")
+    if skipped_count > 0:
+        print(f"[maildir] Skipped {skipped_count} duplicate(s)")
 
 
 def main():

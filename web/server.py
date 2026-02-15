@@ -54,6 +54,8 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.serve_version()
         elif self.path == '/api/cost_trend':
             self.serve_cost_trend()
+        elif self.path == '/api/timeline':
+            self.serve_timeline()
         else:
             # Serve static files
             super().do_GET()
@@ -284,6 +286,56 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(result).encode())
         except Exception as e:
             self.send_error(500, f"Error reading cost trend: {e}")
+
+    def serve_timeline(self):
+        """Serve activity timeline from cycle logs"""
+        try:
+            entries = []
+            if LOGS_DIR.exists():
+                # Get all cycle logs, sorted by modification time (newest first)
+                cycle_files = sorted(
+                    [f for f in LOGS_DIR.glob("cycle_*.log")],
+                    key=os.path.getmtime,
+                    reverse=True
+                )[:20]  # Last 20 entries
+
+                for log_file in cycle_files:
+                    try:
+                        with open(log_file, 'r') as f:
+                            log_data = json.load(f)
+
+                        # Extract timeline entry data
+                        cycle_num = log_data.get('cycle', 0)
+                        timestamp = log_data.get('timestamp', '')
+                        summary = log_data.get('summary', 'No summary')
+                        success = log_data.get('success', True)
+                        mode = log_data.get('mode', 'unknown')
+
+                        # Get cost from nested structure
+                        cost_usd = 0
+                        if 'cost' in log_data:
+                            cost_usd = log_data['cost'].get('cycle_usd', 0)
+                        elif 'cost_usd' in log_data:
+                            cost_usd = log_data.get('cost_usd', 0)
+
+                        entries.append({
+                            'cycle': cycle_num,
+                            'timestamp': timestamp,
+                            'summary': summary,
+                            'success': success,
+                            'mode': mode,
+                            'cost_usd': cost_usd
+                        })
+                    except (json.JSONDecodeError, Exception) as e:
+                        continue
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'entries': entries}).encode())
+        except Exception as e:
+            self.send_error(500, f"Error reading timeline: {e}")
 
     def serve_events(self):
         """Serve Server-Sent Events for state updates"""

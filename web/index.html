@@ -495,6 +495,73 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #00cc00;
         }
+
+        /* Timeline Styles */
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+        }
+        .timeline-item {
+            position: relative;
+            padding: 12px 0;
+            border-left: 2px solid #333;
+            padding-left: 20px;
+            margin-left: 10px;
+        }
+        .timeline-item:last-child {
+            border-left: none;
+        }
+        .timeline-dot {
+            position: absolute;
+            left: -6px;
+            top: 18px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 2px solid #0a0a0a;
+        }
+        .timeline-dot.success {
+            background: #00ff00;
+            box-shadow: 0 0 8px #00ff00;
+        }
+        .timeline-dot.failure {
+            background: #ff0000;
+            box-shadow: 0 0 8px #ff0000;
+        }
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .timeline-time {
+            color: #888;
+            font-size: 0.8em;
+        }
+        .timeline-cycle {
+            color: #00cc00;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        .timeline-summary {
+            color: #00ff00;
+            font-size: 0.9em;
+            margin: 5px 0;
+            line-height: 1.4;
+        }
+        .timeline-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 0.75em;
+            color: #666;
+            margin-top: 5px;
+        }
+        .timeline-mode {
+            color: #888;
+        }
+        .timeline-cost {
+            color: #00cc00;
+        }
     </style>
 </head>
 <body>
@@ -674,6 +741,13 @@
             <canvas id="cost-chart" style="max-height: 300px;"></canvas>
         </div>
 
+        <div class="card" style="margin-bottom: 20px;">
+            <h2>Activity Timeline</h2>
+            <div id="timeline-content" style="max-height: 500px; overflow-y: auto;">
+                <div style="color: #888;">Loading...</div>
+            </div>
+        </div>
+
         <div class="grid">
             <div class="card">
                 <h2>MCP Tools</h2>
@@ -729,7 +803,7 @@
         let eventSource = null;
         let chatHistory = [];
         let previousValues = {};
-        const startTime = Date.now();
+        let systemStartTime = null;
         let costChart = null;
 
         function formatNumber(num) {
@@ -741,11 +815,28 @@
         }
 
         function formatUptime(startTimestamp) {
+            if (!startTimestamp) return '--';
             const now = Date.now();
             const diff = now - startTimestamp;
             const hours = Math.floor(diff / 3600000);
             const minutes = Math.floor((diff % 3600000) / 60000);
             return `${hours}h ${minutes}m`;
+        }
+
+        function formatRelativeTime(timestamp) {
+            if (!timestamp) return '--';
+            const now = Date.now();
+            const date = new Date(timestamp);
+            const diff = now - date.getTime();
+
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+
+            if (minutes < 1) return 'just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            return `${days}d ago`;
         }
 
         function updateMetricValue(id, newValue) {
@@ -788,8 +879,13 @@
                 updateMetricValue('title-cycle', state.cycle_count);
                 updateMetricValue('footer-cycle', state.cycle_count);
                 updateMetricValue('banner-cycle', state.cycle_count);
-                updateMetricValue('header-uptime', formatUptime(startTime));
-                updateMetricValue('system-uptime-display', formatUptime(startTime));
+
+                // Set system start time if we have it
+                if (state.created && !systemStartTime) {
+                    systemStartTime = new Date(state.created).getTime();
+                }
+                updateMetricValue('header-uptime', formatUptime(systemStartTime));
+                updateMetricValue('system-uptime-display', formatUptime(systemStartTime));
                 updateMetricValue('header-status', state.last_result_success ? 'OK' : 'ERROR');
                 updateMetricValue('last-updated', new Date().toLocaleTimeString());
                 updateCriticalityIndicator(state.criticality);
@@ -1131,6 +1227,7 @@
                 try {
                     const state = JSON.parse(e.data);
                     updateStatus(state);
+                    updateTimeline();
                     document.getElementById('connection-status').textContent = 'Connected (Live)';
                     document.getElementById('connection-status').style.color = '#00ff00';
                 } catch (error) {
@@ -1252,16 +1349,54 @@
             }
         }
 
+        async function updateTimeline() {
+            try {
+                const res = await fetch('/api/timeline');
+                const data = await res.json();
+                const entries = data.entries || [];
+                const container = document.getElementById('timeline-content');
+
+                if (entries.length > 0) {
+                    container.innerHTML = '<div class="timeline">' + entries.map(entry => {
+                        const dotClass = entry.success ? 'success' : 'failure';
+                        const relTime = formatRelativeTime(entry.timestamp);
+                        const cost = entry.cost_usd ? '$' + entry.cost_usd.toFixed(4) : '$0.0000';
+
+                        return `
+                            <div class="timeline-item">
+                                <div class="timeline-dot ${dotClass}"></div>
+                                <div class="timeline-header">
+                                    <span class="timeline-cycle">Cycle ${entry.cycle}</span>
+                                    <span class="timeline-time">${relTime}</span>
+                                </div>
+                                <div class="timeline-summary">${entry.summary}</div>
+                                <div class="timeline-meta">
+                                    <span class="timeline-mode">[${entry.mode}]</span>
+                                    <span class="timeline-cost">${cost}</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('') + '</div>';
+                } else {
+                    container.innerHTML = '<div style="color: #888;">No timeline data available</div>';
+                }
+            } catch (error) {
+                console.error('Failed to load timeline:', error);
+            }
+        }
+
         // Initialize
         updateStatus();
         updateMCP();
         updateCostTrend();
+        updateTimeline();
         loadChatHistory();
         connectSSE();
 
         // Update uptime every minute
         setInterval(() => {
-            document.getElementById('header-uptime').textContent = formatUptime(startTime);
+            document.getElementById('header-uptime').textContent = formatUptime(systemStartTime);
+            document.getElementById('system-uptime-display').textContent = formatUptime(systemStartTime);
         }, 60000);
 
         // Update "last updated" timestamp every 5 seconds

@@ -17,6 +17,9 @@ if [ -f "$PIDFILE" ]; then
     fi
 fi
 
+# Ensure clean environment for chat subprocess
+unset CLAUDECODE 2>/dev/null || true
+
 # Start the dashboard in background
 python3 "$DASHBOARD_SCRIPT" > /tmp/vsm-dashboard.log 2>&1 &
 NEW_PID=$!

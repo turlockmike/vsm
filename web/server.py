@@ -641,14 +641,16 @@ class VSMHandler(SimpleHTTPRequestHandler):
             # Build prompt for Claude
             prompt = f"You are VSM, an autonomous AI system. The user is your owner asking a question via the web dashboard. Be concise and helpful. Their message: {message}"
 
-            # Call claude CLI
+            # Call claude CLI (clean env to avoid nested session detection)
             try:
+                env = {k: v for k, v in os.environ.items() if k != 'CLAUDECODE'}
                 result = subprocess.run(
                     ['claude', '-p', prompt, '--max-turns', '3'],
                     capture_output=True,
                     text=True,
                     timeout=60,
-                    cwd=str(VSM_ROOT)
+                    cwd=str(VSM_ROOT),
+                    env=env
                 )
 
                 if result.returncode == 0:

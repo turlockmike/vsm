@@ -587,6 +587,24 @@ def send_weekly_report():
         return {"sent": False, "error": str(e)}
 
 
+def _has_new_inbox(state):
+    """Check if inbox has messages newer than last cycle completion."""
+    inbox_dir = VSM_ROOT / "inbox"
+    if not inbox_dir.exists():
+        return False
+    last_updated = state.get("updated")
+    if not last_updated:
+        return True  # First cycle, treat everything as new
+    try:
+        last_ts = datetime.fromisoformat(last_updated).timestamp()
+    except Exception:
+        return True
+    for f in inbox_dir.glob("*.txt"):
+        if f.stat().st_mtime > last_ts:
+            return True
+    return False
+
+
 def main():
     # === Gather sensory input ===
     state = load_state()
@@ -607,6 +625,17 @@ def main():
 
     health = check_health()
     state["health"] = health
+
+    # === Idle cycle detection ===
+    # Skip Claude invocation when there's nothing actionable.
+    # Saves ~$0.50-1.00 per idle cycle (owner's #1 pain point: cost).
+    tasks = gather_tasks()
+    has_new_mail = _has_new_inbox(state)
+    if not tasks and not has_new_mail:
+        state["criticality"] = compute_criticality(state, health)
+        save_state(state)
+        print(f"[VSM] Idle skip: no tasks, no new mail. Criticality={state['criticality']}")
+        return
 
     # === Launch support infrastructure ===
     # Monitor GitHub metrics and auto-triage issues during launch window
@@ -658,6 +687,7 @@ def main():
     if archived:
         print(f"[VSM] Archived {archived} completed task(s)")
 
+    # Tasks already gathered above (for idle detection); re-gather after archiving
     tasks = gather_tasks()
     recent_logs = gather_recent_logs(n=3)
 

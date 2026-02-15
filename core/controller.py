@@ -258,6 +258,8 @@ Health: {json.dumps(compact_health)}
 Tasks: {json.dumps(tasks) if tasks else "None"}
 Recent: {json.dumps(recent_logs) if recent_logs else "None"}
 
+Criticality: 0.0=chaos(stabilize!) 0.5=viable(ship!) 1.0=stagnant(shake things up!)
+
 Pick highest-value actionable task. Delegate to builder (sonnet) or researcher (haiku) via Task tool. Log to state/logs/. Commit before finishing.
 """
 
@@ -336,6 +338,55 @@ def _safe_timestamp(err):
         return datetime.fromisoformat(err["time"]).timestamp()
     except Exception:
         return 0
+
+
+def compute_criticality(state, health):
+    """Compute criticality from system signals. 0.0=chaos, 0.5=viable, 1.0=stagnant."""
+
+    # --- Chaos score (0.0 = no chaos, 1.0 = total chaos) ---
+    failures = _recent_failure_count(state)
+    chaos = 0.0
+    chaos += min(failures / 6.0, 1.0) * 0.6        # failures dominate chaos signal
+    if not health.get("cron_installed", True):
+        chaos += 0.2                                  # no heartbeat is serious
+    if health.get("disk_pct_used", 0) > 90:
+        chaos += 0.1
+    if health.get("mem_available_mb", 9999) < 500:
+        chaos += 0.1
+    chaos = min(chaos, 1.0)
+
+    # --- Stagnation score (0.0 = active, 1.0 = fully stagnant) ---
+    stagnation = 0.0
+
+    # Time since last successful cycle
+    updated = state.get("updated")
+    if updated:
+        hours_since = (datetime.now() - datetime.fromisoformat(updated)).total_seconds() / 3600
+        stagnation += min(hours_since / 2.0, 1.0) * 0.5   # 2+ hours idle = max stagnation signal
+
+    # Task backlog growing without completion
+    pending = health.get("pending_tasks", 0)
+    if pending > 5:
+        stagnation += min((pending - 5) / 10.0, 1.0) * 0.3
+
+    # Low cycle count relative to system age (system exists but doesn't do anything)
+    cycle_count = state.get("cycle_count", 0)
+    created = state.get("created")
+    if created and cycle_count > 0:
+        age_hours = (datetime.now() - datetime.fromisoformat(created)).total_seconds() / 3600
+        expected_cycles = age_hours * 12  # 5-min heartbeat = 12/hr
+        if expected_cycles > 0:
+            throughput = cycle_count / expected_cycles
+            stagnation += max(0, (1.0 - throughput)) * 0.2
+
+    stagnation = min(stagnation, 1.0)
+
+    # --- Criticality: map chaos and stagnation to 0.0-1.0 spectrum ---
+    # High chaos → low criticality (toward 0.0)
+    # High stagnation → high criticality (toward 1.0)
+    # Neither → 0.5 (healthy)
+    criticality = 0.5 - (chaos * 0.5) + (stagnation * 0.5)
+    return round(max(0.0, min(1.0, criticality)), 2)
 
 
 def run_claude(prompt, model="opus", timeout=300):
@@ -483,6 +534,9 @@ def main():
 
     health = check_health()
     state["health"] = health
+
+    # Compute criticality from system signals
+    state["criticality"] = compute_criticality(state, health)
 
     # Read inbox emails from filesystem (Maildir) for context injection
     inbox_result = process_inbox()

@@ -11,8 +11,13 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
+
+# Add core/ to path so we can import sibling modules
+sys.path.insert(0, str(Path(__file__).parent))
+from maildir import get_inbox_id, mark_thread_read
 
 VSM_ROOT = Path(__file__).parent.parent
 INBOX_DIR = VSM_ROOT / "inbox"
@@ -251,8 +256,15 @@ I'll update you when it's done."""
                 print(f"[email-responder-v2] Failed to generate reply for: {subject}")
                 continue
 
-        # Mark as read
+        # Mark as read locally
         mark_as_read(filepath)
+
+        # Mark as read in API to prevent re-sync
+        try:
+            inbox_id = get_inbox_id()
+            mark_thread_read(inbox_id, thread_id)
+        except Exception as e:
+            print(f"[email-responder-v2] Warning: could not mark thread read in API: {e}")
 
         # Log it
         log_file = LOG_DIR / f"email_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"

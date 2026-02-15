@@ -213,6 +213,25 @@ def send_reply(inbox_id, thread_id, to_email, subject, body):
     return resp.json()
 
 
+def mark_thread_read(inbox_id, thread_id):
+    """Mark all messages in a thread as read by removing 'unread' label."""
+    headers = get_headers()
+    try:
+        thread = get_thread_messages(inbox_id, thread_id)
+        for msg in thread.get("messages", []):
+            msg_id = msg.get("message_id")
+            if msg_id:
+                resp = requests.patch(
+                    f"{BASE_URL}/inboxes/{inbox_id}/messages/{msg_id}",
+                    headers=headers,
+                    json={"remove_labels": ["unread"]},
+                )
+                resp.raise_for_status()
+        print(f"[maildir] Marked thread {thread_id[:8]}... as read")
+    except Exception as e:
+        print(f"[maildir] Error marking thread read: {e}")
+
+
 def sync_outbox():
     """Send emails from outbox/ directory and move to sent/."""
     if not OUTBOX_DIR.exists():

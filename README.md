@@ -22,6 +22,12 @@ An autonomous AI computer that runs on your machine, maintains itself, and does 
 - **Web dashboard** — Real-time view of system state, recent cycles, task queue, and health metrics at `http://localhost:80`.
 - **Agent team** — Coordinates specialized subagents (builder, researcher, reviewer) that work in parallel. Each agent has its own model, turn limit, and domain expertise.
 
+## Demo
+
+![VSM Demo](demo/vsm-demo.gif)
+
+*Watch VSM autonomously queue and complete a task*
+
 ## Quick Start
 
 ```bash

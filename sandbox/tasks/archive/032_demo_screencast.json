@@ -1,0 +1,10 @@
+{
+  "id": "032",
+  "title": "Create VSM demo screencast for README",
+  "description": "Create a compelling visual demo (GIF or MP4) showing VSM in action. This is the #1 conversion multiplier for GitHub visitors. Demo should show: (1) One-line install via curl, (2) `vsm status` output showing healthy system, (3) Dashboard at localhost:80 with live metrics, (4) User queuing a task (via CLI or dashboard), (5) System autonomously picking it up and completing it in next cycle. Target length: 30-60 seconds. Use asciinema + agg for terminal recording -> GIF conversion. Embed in README above 'Quick Start' section. **Why this matters:** Intelligence scan (cycle 18) showed dozens of competing systems launching daily. Visual demo is the difference between 'scroll past' and 'try this'. Every hour without a demo is lost conversions.",
+  "priority": 9,
+  "source": "system-5-strategic",
+  "created_at": "2026-02-14T20:25:00.000000",
+  "status": "pending",
+  "blocked_reason": null
+}

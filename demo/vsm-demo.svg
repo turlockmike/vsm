@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="800" height="500" viewBox="0 0 800 500">
+  <style>
+    .terminal {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .prompt { fill: #6c71c4; font-weight: bold; }
+    .command { fill: #268bd2; }
+    .output { fill: #93a1a1; }
+    .success { fill: #859900; }
+    .highlight { fill: #2aa198; }
+    .title { fill: #eee8d5; font-weight: bold; }
+    .bg { fill: #002b36; }
+    .border { stroke: #073642; stroke-width: 2; fill: none; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .line { animation: fadeIn 0.3s ease-in; }
+  </style>
+
+  <rect class="bg" width="800" height="500" rx="10"/>
+  <rect class="border" x="5" y="5" width="790" height="490" rx="10"/>
+
+  <g class="terminal">
+    <!-- Title -->
+    <text class="title" x="20" y="35">VSM — Autonomous AI Computer Demo</text>
+    <line x1="20" y1="45" x2="780" y2="45" stroke="#073642" stroke-width="1"/>
+
+    <!-- Frame 1: vsm status -->
+    <g class="line" style="animation-delay: 0s">
+      <text class="prompt" x="20" y="70">$</text>
+      <text class="command" x="40" y="70">vsm status</text>
+    </g>
+
+    <g class="line" style="animation-delay: 0.5s">
+      <text class="output" x="20" y="90">System Status: Healthy</text>
+      <text class="success" x="20" y="108">✓ Controller running</text>
+      <text class="success" x="20" y="126">✓ Dashboard active (http://localhost:80)</text>
+      <text class="success" x="20" y="144">✓ Cron heartbeat every 5 min</text>
+      <text class="output" x="20" y="162">Active Errors: 0</text>
+      <text class="output" x="20" y="180">Pending Tasks: 0</text>
+    </g>
+
+    <!-- Frame 2: Create task -->
+    <g class="line" style="animation-delay: 2.5s">
+      <text class="prompt" x="20" y="210">$</text>
+      <text class="command" x="40" y="210">vsm task add "Calculate fibonacci(10)"</text>
+    </g>
+
+    <g class="line" style="animation-delay: 3s">
+      <text class="success" x="20" y="230">✓ Task created: task_001.json</text>
+      <text class="highlight" x="20" y="248">  Priority: medium</text>
+      <text class="highlight" x="20" y="266">  Status: pending</text>
+    </g>
+
+    <!-- Frame 3: Autonomous execution -->
+    <g class="line" style="animation-delay: 4.5s">
+      <text class="output" x="20" y="296">[Autonomous cycle triggered by cron...]</text>
+      <text class="success" x="20" y="314">✓ Heartbeat running</text>
+      <text class="success" x="20" y="332">✓ System 5 analyzing task queue</text>
+      <text class="success" x="20" y="350">✓ Delegating to builder agent</text>
+      <text class="success" x="20" y="368">✓ Task completed: fibonacci(10) = 55</text>
+    </g>
+
+    <!-- Frame 4: Final status -->
+    <g class="line" style="animation-delay: 6.5s">
+      <text class="prompt" x="20" y="398">$</text>
+      <text class="command" x="40" y="398">vsm status</text>
+    </g>
+
+    <g class="line" style="animation-delay: 7s">
+      <text class="output" x="20" y="418">System Status: Healthy</text>
+      <text class="output" x="20" y="436">Completed Tasks (24h): 1</text>
+      <text class="success" x="20" y="454">✓ fibonacci(10) = 55</text>
+    </g>
+
+    <!-- Footer -->
+    <g class="line" style="animation-delay: 8.5s">
+      <text class="title" x="20" y="485" style="font-size: 12px">Try it: curl -fsSL https://raw.githubusercontent.com/turlockmike/vsm/main/install.sh | bash</text>
+    </g>
+  </g>
+
+  <!-- Loop animation -->
+  <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.9;0.95;1" dur="10s" repeatCount="indefinite"/>
+</svg>

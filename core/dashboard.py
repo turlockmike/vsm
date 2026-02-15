@@ -19,7 +19,7 @@ STATE_FILE = VSM_ROOT / 'state' / 'state.json'
 TASKS_DIR = VSM_ROOT / 'sandbox' / 'tasks'
 LOGS_DIR = VSM_ROOT / 'state' / 'logs'
 
-PORT = 7777
+PORT = 8090
 
 
 class DashboardHandler(http.server.SimpleHTTPRequestHandler):

@@ -444,6 +444,11 @@ def run_claude(prompt, model="opus", timeout=300):
         "--append-system-prompt", autonomy_prompt,
     ]
 
+    # Wire in MCP servers if config exists
+    mcp_config = VSM_ROOT / ".mcp.json"
+    if mcp_config.exists():
+        cmd.extend(["--mcp-config", str(mcp_config)])
+
     try:
         result = subprocess.run(
             cmd,

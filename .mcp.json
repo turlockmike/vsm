@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "github": {
+      "command": "/home/mike/.nvm/versions/node/v22.22.0/bin/npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "fetch": {
+      "command": "/home/mike/.local/bin/mcp-server-fetch",
+      "args": []
+    },
+    "memory": {
+      "command": "/home/mike/.nvm/versions/node/v22.22.0/bin/npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "/home/mike/projects/vsm/main/state/knowledge_graph.json"
+      }
+    }
+  }
+}

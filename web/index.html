@@ -536,6 +536,11 @@
 
         <div class="grid">
             <div class="card">
+                <h2>MCP Tools</h2>
+                <div id="mcp-servers">Loading...</div>
+            </div>
+
+            <div class="card">
                 <h2>Pending Tasks</h2>
                 <ul class="task-list" id="task-list">
                     <li>Loading...</li>
@@ -974,8 +979,31 @@
             };
         }
 
+        async function updateMCP() {
+            try {
+                const res = await fetch('/api/mcp');
+                const data = await res.json();
+                const container = document.getElementById('mcp-servers');
+                const servers = data.servers || {};
+                const names = Object.keys(servers);
+                if (names.length > 0) {
+                    container.innerHTML = names.map(name => `
+                        <div class="metric">
+                            <span class="metric-label">${name}</span>
+                            <span class="metric-value status-ok">${servers[name].status}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<div style="color: #888;">No MCP servers configured</div>';
+                }
+            } catch (error) {
+                console.error('Failed to load MCP:', error);
+            }
+        }
+
         // Initialize
         updateStatus();
+        updateMCP();
         connectSSE();
 
         // Update uptime every minute

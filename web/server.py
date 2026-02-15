@@ -42,6 +42,8 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.serve_tasks()
         elif self.path.startswith('/api/logs'):
             self.serve_logs()
+        elif self.path == '/api/mcp':
+            self.serve_mcp()
         elif self.path == '/api/events':
             self.serve_events()
         else:
@@ -146,6 +148,26 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({'logs': logs}).encode())
         except Exception as e:
             self.send_error(500, f"Error reading logs: {e}")
+
+    def serve_mcp(self):
+        """Serve MCP server configuration"""
+        try:
+            mcp_file = VSM_ROOT / ".mcp.json"
+            servers = {}
+            if mcp_file.exists():
+                config = json.loads(mcp_file.read_text())
+                for name, cfg in config.get("mcpServers", {}).items():
+                    servers[name] = {
+                        "command": cfg.get("command", "").split("/")[-1],
+                        "status": "configured",
+                    }
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({"servers": servers}).encode())
+        except Exception as e:
+            self.send_error(500, f"Error reading MCP config: {e}")
 
     def serve_events(self):
         """Serve Server-Sent Events for state updates"""

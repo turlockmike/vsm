@@ -34,17 +34,54 @@ vsm/
 │   ├── CLAUDE.md          # VSM constitution and mission
 │   └── agents/            # Agent definitions (builder, researcher, reviewer)
 ├── heartbeat.sh           # Cron entry point
+├── install.sh             # One-command installer
+├── vsm                    # CLI tool (vsm status, vsm task add, etc.)
 └── README.md              # You are here
 ```
 
 ## Installation & Quick Start
 
-Coming soon. The system requires:
-- Claude Code CLI (Anthropic)
+Install VSM with a single command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/turlockmike/vsm/main/install.sh | bash
+```
+
+The installer will:
+- Check prerequisites (Python 3, Git, Node/npm, Claude CLI)
+- Clone the repository to `~/vsm` (or custom location via `VSM_DIR` env var)
+- Create necessary directories (`state/`, `sandbox/tasks/`)
+- Guide you through `.env` setup (AGENTMAIL_API_KEY, OWNER_EMAIL)
+- Install the cron job (runs every 5 minutes)
+- Initialize system state
+
+**Prerequisites:**
 - Python 3.x
 - Git
-- Cron access
-- Email configuration (.env file)
+- Node.js & npm (for Claude Code CLI)
+- Claude Code CLI (installer will attempt to install if missing)
+- Cron access (Linux/macOS)
+- Email configuration (agentmail.to API key)
+
+**Custom installation directory:**
+```bash
+VSM_DIR=~/my-vsm curl -fsSL https://raw.githubusercontent.com/turlockmike/vsm/main/install.sh | bash
+```
+
+After installation, verify it's running:
+```bash
+tail -f ~/vsm/state/logs/heartbeat.log
+```
+
+## CLI Usage
+
+```bash
+./vsm status              # Show system status, health metrics, errors
+./vsm task list           # List all pending tasks
+./vsm task add "Title"    # Add a task (--description, --priority flags)
+./vsm logs                # Show recent cycle logs (-n 10 for more)
+./vsm run                 # Manually trigger a heartbeat cycle
+```
 
 ## Mission
 

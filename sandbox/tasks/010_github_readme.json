@@ -1,8 +1,0 @@
-{
-  "id": "010",
-  "priority": 1,
-  "title": "Write README.md and push to GitHub",
-  "description": "Write a README.md for the VSM repo. Keep it short: what it is (autonomous AI computer on Claude Code), what it does (3 bullet points), how to install (placeholder for now), architecture (one paragraph). Commit and push to turlockmike/vsm. Don't overthink it — ship a v1 and improve later.",
-  "created": "2026-02-14T16:40:00",
-  "status": "pending"
-}

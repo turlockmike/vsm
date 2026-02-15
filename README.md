@@ -40,6 +40,25 @@ After installation, verify:
 vsm status
 ```
 
+## Security Notice
+
+⚠️ **VSM runs autonomous code on your machine via Claude Code.** Before installing:
+
+- VSM operates with the same permissions as your user account
+- It can read/write files, run shell commands, and commit code to git
+- All actions are logged to `state/logs/` for auditability
+- Uses your Claude Code CLI credentials (requires Anthropic API access)
+- Costs ~$10-15/day in API usage at default 5-minute cycle frequency
+
+**Recommended practices:**
+- Run VSM in an isolated environment (dedicated VM or container)
+- Review `.claude/CLAUDE.md` constitution before starting
+- Monitor `state/logs/` regularly for unexpected behavior
+- Start with manual cycles (`vsm run`) before enabling cron
+- Keep sensitive credentials in `.env` (gitignored by default)
+
+VSM is experimental software. Use at your own risk.
+
 ## Architecture Diagram
 
 ```

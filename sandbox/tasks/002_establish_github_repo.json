@@ -1,8 +1,0 @@
-{
-  "id": "002",
-  "priority": 2,
-  "title": "Create GitHub repo and push VSM codebase",
-  "description": "Use gh CLI to create a new repo turlockmike/vsm on GitHub. Set .bare remote to point there. Push main branch. This gives the system version-controlled persistence beyond the local machine.",
-  "created": "2026-02-14T16:08:00",
-  "status": "pending"
-}

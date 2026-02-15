@@ -14,6 +14,9 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+# Import memory system
+from memory import load_memory, init_memory_files
+
 VSM_ROOT = Path(__file__).parent.parent
 STATE_DIR = VSM_ROOT / "state"
 STATE_FILE = STATE_DIR / "state.json"
@@ -258,10 +261,18 @@ def build_prompt(state, health, tasks, recent_logs, inbox_messages=None):
             context_section += f"- **{msg.get('subject', '(no subject)')}**: {msg.get('body', '(empty)')[:150]}\n"
         context_section += "\n"
 
+    # Load persistent memory (structured knowledge base)
+    persistent_memory = load_memory()
+
+    # Load observations (short-term cycle history)
     observations = load_observations()
+
+    # Build memory section with both long-term and short-term context
     memory_section = ""
+    if persistent_memory:
+        memory_section += persistent_memory + "\n\n"
     if observations:
-        memory_section = f"## Memory\n{observations}\n\n"
+        memory_section += f"## Recent Observations\n{observations}\n\n"
 
     slim = _slim_state(state)
     # Only include health fields that matter for decisions
@@ -290,6 +301,8 @@ Recent: {json.dumps(recent_logs) if recent_logs else "None"}
 Criticality: 0.0=chaos(stabilize!) 0.5=viable(ship!) 1.0=stagnant(shake things up!){cost_line}
 
 Pick highest-value actionable task. Delegate to builder (sonnet) or researcher (haiku) via Task tool. Log to state/logs/. Commit before finishing.
+
+Memory: Use `from core.memory import append_to_memory` to record new learnings (decisions, preferences, project changes).
 """
 
 
@@ -577,6 +590,9 @@ def send_weekly_report():
 def main():
     # === Gather sensory input ===
     state = load_state()
+
+    # Initialize memory files if this is first run
+    init_memory_files()
 
     # Expire old errors (>1 hour) to prevent stale accumulation
     _expire_old_errors(state)

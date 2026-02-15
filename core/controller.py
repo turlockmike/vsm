@@ -146,11 +146,21 @@ def run_claude(prompt, model="sonnet"):
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
 
+    autonomy_prompt = (
+        "You are autonomous. There is no user in this session. "
+        "Do not ask for confirmation, do not wait for input, do not hedge. "
+        "Decide and act. If a task is too large for one cycle, do the most "
+        "valuable piece of it and leave a follow-up task in sandbox/tasks/. "
+        "If you hit a rate limit or error, log it and exit cleanly — do not retry. "
+        "Commit your work to git before finishing."
+    )
+
     cmd = [
         CLAUDE_BIN,
         "-p", prompt,
         "--model", model,
         "--dangerously-skip-permissions",
+        "--append-system-prompt", autonomy_prompt,
     ]
 
     try:

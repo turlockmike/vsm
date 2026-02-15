@@ -1,0 +1,8 @@
+{
+  "id": "014",
+  "priority": 0,
+  "title": "Reply to owner emails in the same cycle — don't defer",
+  "description": "Change process_inbox.py (or controller.py) so that when an owner email is found, System 5 gets it as context in the prompt with instruction to REPLY via comm.py before doing anything else. Currently emails become tasks for future cycles — too slow. Single cycle: read the code, make the change, test it.",
+  "created": "2026-02-14T16:55:00",
+  "status": "pending"
+}

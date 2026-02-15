@@ -1,0 +1,8 @@
+{
+  "id": "015",
+  "priority": 0,
+  "title": "Verify claude-om works with autonomous claude -p invocations",
+  "description": "Check if the claude-om plugin hooks fire during claude -p sessions. The plugin is at ~/projects/claude-om/main/. Run: claude -p 'What observations do you see in your system prompt?' --dangerously-skip-permissions and check if observations appear. If not, figure out why and fix it. This gives the system memory across cycles.",
+  "created": "2026-02-14T17:00:00",
+  "status": "pending"
+}

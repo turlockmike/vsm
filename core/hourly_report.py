@@ -3,12 +3,14 @@
 VSM Hourly Report — System status digest.
 
 Runs at top of every hour. Reads state, logs, tasks.
-Composes concise plain-text report. Sends via outbox/.
+Composes concise plain-text report. Sends via comm.py.
 NO LLM calls — pure Python string formatting.
 """
 
 import json
 import os
+import subprocess
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -16,20 +18,7 @@ VSM_ROOT = Path(__file__).parent.parent
 STATE_FILE = VSM_ROOT / "state" / "state.json"
 LOGS_DIR = VSM_ROOT / "state" / "logs"
 TASKS_DIR = VSM_ROOT / "sandbox" / "tasks"
-OUTBOX_DIR = VSM_ROOT / "outbox"
-CONFIG_FILE = VSM_ROOT / ".env"
-
-
-def load_config():
-    """Load secrets from .env file."""
-    config = {}
-    if CONFIG_FILE.exists():
-        for line in CONFIG_FILE.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, v = line.split("=", 1)
-                config[k.strip()] = v.strip()
-    return config
+COMM_SCRIPT = VSM_ROOT / "core" / "comm.py"
 
 
 def load_state():
@@ -133,159 +122,101 @@ def get_completed_tasks_last_hour():
 
 
 def format_report(state, logs, all_tasks, completed_tasks):
-    """Format the hourly report as plain text."""
+    """Format concise hourly report (under 300 words)."""
     now = datetime.now()
 
-    # System status
-    status_lines = [
-        "VSM HOURLY REPORT",
-        "=" * 60,
-        f"Time: {now.strftime('%Y-%m-%d %H:%M')}",
-        "",
-        "SYSTEM STATUS",
-        "-" * 60,
+    # Header
+    lines = [
+        f"VSM HOURLY STATUS - {now.strftime('%Y-%m-%d %H:%M')}",
+        ""
     ]
 
+    # Current Status (compact)
     if state:
         health = state.get("health", {})
-        token_usage = state.get("token_usage", {})
         token_budget = state.get("token_budget", {})
-        errors = state.get("errors", [])
 
-        # Calculate daily cumulative tokens
-        today_input = token_budget.get('today_input', 0)
-        today_output = token_budget.get('today_output', 0)
+        cycle = state.get('cycle_count', 0)
+        crit = state.get('criticality', 0.0)
+        disk = health.get('disk_free_gb', 0)
+        mem = health.get('mem_available_mb', 0)
+        pending = health.get('pending_tasks', 0)
 
-        status_lines.extend([
-            f"Status: {'UP' if state.get('last_result_success', False) else 'DOWN'}",
-            f"Cycle count: {state.get('cycle_count', 0)}",
-            f"Last action: {state.get('last_action', 'None')}",
-            f"Criticality: {state.get('criticality', 0.0):.2f}",
-            f"Pending tasks: {health.get('pending_tasks', 0)}",
-            "",
-            "Resource usage:",
-            f"  Disk free: {health.get('disk_free_gb', 0):.1f} GB ({health.get('disk_pct_used', 0):.1f}% used)",
-            f"  Memory available: {health.get('mem_available_mb', 0)} MB",
-            f"  Log size: {health.get('log_size_mb', 0):.2f} MB",
-            "",
-            "Token usage (cumulative today):",
-            f"  Input: {today_input:,} tokens",
-            f"  Output: {today_output:,} tokens",
-            f"  Total: {today_input + today_output:,} tokens",
-            f"  Daily soft cap: {token_budget.get('daily_soft_cap', 0):,}",
-        ])
+        lines.append(f"CURRENT: Cycle {cycle} | Criticality {crit:.2f} | {pending} tasks queued")
+        lines.append(f"HEALTH: {disk:.0f}GB disk | {mem}MB RAM | {'UP' if state.get('last_result_success') else 'DOWN'}")
+        lines.append("")
 
-        if errors:
-            status_lines.append("")
-            status_lines.append("Recent errors:")
-            for err in errors[-3:]:  # Last 3 errors
-                status_lines.append(f"  {err.get('time', 'unknown')}: {err.get('error', 'unknown')}")
-    else:
-        status_lines.append("No state data available")
+        # Cost
+        today_cost = token_budget.get('today_cost_usd', 0)
+        total_cost = state.get('token_usage', {}).get('total_cost_usd', 0)
+        lines.append(f"COST: Today ${today_cost:.2f} | Total ${total_cost:.2f}")
+        lines.append("")
 
-    # What I shipped
+    # Recent Activity
+    lines.append("RECENT ACTIVITY (last hour):")
     if completed_tasks:
-        status_lines.extend([
-            "",
-            "WHAT I SHIPPED",
-            "-" * 60,
-        ])
-        for task in completed_tasks:
-            result_preview = task['result'][:120] if task['result'] else "Completed"
-            status_lines.append(f"  [{task['id']}] {task['title']}: {result_preview}")
-
-    # Activity this hour
-    status_lines.extend([
-        "",
-        "ACTIVITY THIS HOUR",
-        "-" * 60,
-    ])
-
-    if logs:
-        for log in logs[-5:]:  # Last 5 logs
+        for task in completed_tasks[:3]:
+            lines.append(f"  SHIPPED: [{task['id']}] {task['title']}")
+    elif logs:
+        for log in logs[-3:]:
             log_data = log['data']
-            summary = log_data.get('summary', '')
-            success = log_data.get('success', None)
-            reason = log_data.get('reason', '')
-
-            status_marker = ""
-            if success is True:
-                status_marker = "[OK] "
-            elif success is False:
-                status_marker = "[FAIL] "
-
-            # Show summary if available, otherwise show reason
-            display_text = summary if summary else reason
-            if display_text:
-                # Truncate to 100 chars for readability
-                display_text = display_text[:100]
-                status_lines.append(f"  [{log['time']}] {status_marker}{display_text}")
-            else:
-                status_lines.append(f"  [{log['time']}] {log['file']}")
+            summary = log_data.get('summary', '') or log_data.get('reason', '') or log['file']
+            lines.append(f"  {log['time']}: {summary[:80]}")
     else:
-        status_lines.append("No activity logged this hour")
+        lines.append("  No activity")
+    lines.append("")
 
-    # Pending tasks
-    status_lines.extend([
-        "",
-        "PENDING TASKS",
-        "-" * 60,
-    ])
+    # Active Tasks
+    lines.append("ACTIVE TASKS:")
+    pending = [t for t in all_tasks if t['status'] == 'pending']
+    blocked = [t for t in all_tasks if t['status'] == 'blocked']
 
-    pending_tasks = [t for t in all_tasks if t['status'] == 'pending']
-    blocked_tasks = [t for t in all_tasks if t['status'] == 'blocked']
+    if pending:
+        for task in sorted(pending, key=lambda t: -t['priority'])[:3]:
+            lines.append(f"  [{task['id']}] P{task['priority']}: {task['title']}")
+    if blocked:
+        for task in blocked[:2]:
+            lines.append(f"  BLOCKED: [{task['id']}] {task['title']}")
+    if not pending and not blocked:
+        lines.append("  Queue empty")
+    lines.append("")
 
-    if pending_tasks:
-        for task in pending_tasks:
-            status = task['status']
-            priority = task['priority']
-            status_lines.append(f"  [{task['id']}] {task['title']} (priority: {priority}, status: {status})")
+    # Next Priorities
+    lines.append("NEXT UP:")
+    if state:
+        lines.append(f"  Last: {state.get('last_action', 'Unknown')}")
+    if pending:
+        top = pending[0]
+        lines.append(f"  Next: Task {top['id']} - {top['title']}")
+    elif blocked:
+        lines.append(f"  Waiting on owner for task {blocked[0]['id']}")
+    else:
+        lines.append("  Awaiting new directives")
 
-    if blocked_tasks:
-        status_lines.append("")
-        status_lines.append("Blocked tasks:")
-        for task in blocked_tasks:
-            priority = task['priority']
-            status_lines.append(f"  [{task['id']}] {task['title']} (priority: {priority}, status: blocked)")
-
-    if not pending_tasks and not blocked_tasks:
-        status_lines.append("No pending tasks")
-
-    status_lines.extend([
-        "",
-        "=" * 60,
-        "End of hourly report",
-        ""
-    ])
-
-    return "\n".join(status_lines)
+    return "\n".join(lines)
 
 
 def send_report(report_text):
-    """Write report to outbox/ for sending via maildir."""
-    config = load_config()
-    owner_email = config.get("OWNER_EMAIL", "")
-
-    if not owner_email:
-        print("[hourly_report] ERROR: No OWNER_EMAIL in .env")
-        return False
-
+    """Send report via comm.py."""
     now = datetime.now()
-    thread_id = f"hourly-report-{now.strftime('%Y%m%d-%H')}"
-    subject = f"VSM Hourly Report - {now.strftime('%H:00')}"
+    subject = f"Hourly Status - {now.strftime('%H:00')}"
 
-    OUTBOX_DIR.mkdir(parents=True, exist_ok=True)
-
-    outfile = OUTBOX_DIR / f"{thread_id}.txt"
-    content = f"""Thread-ID: {thread_id}
-To: {owner_email}
-Subject: {subject}
----
-{report_text}"""
-
-    outfile.write_text(content)
-    print(f"[hourly_report] Report written to outbox: {outfile.name}")
-    return True
+    try:
+        result = subprocess.run(
+            [sys.executable, str(COMM_SCRIPT), subject, report_text],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30
+        )
+        print(f"[hourly_report] Report sent successfully")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"[hourly_report] ERROR sending report: {e.stderr}")
+        return False
+    except Exception as e:
+        print(f"[hourly_report] ERROR: {e}")
+        return False
 
 
 def main():

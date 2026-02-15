@@ -5,6 +5,7 @@ Analyzes the past 7 days of VSM activity and emails a concise summary to the own
 """
 
 import json
+import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -13,9 +14,17 @@ VSM_ROOT = Path(__file__).parent.parent.parent
 STATE_DIR = VSM_ROOT / "state"
 LOG_DIR = STATE_DIR / "logs"
 STATE_FILE = STATE_DIR / "state.json"
+OUTBOX_DIR = VSM_ROOT / "outbox"
+CONFIG_FILE = VSM_ROOT / ".env"
 
-sys.path.insert(0, str(VSM_ROOT / "core"))
-from comm import send_email
+
+def _load_owner_email():
+    """Load owner email from .env."""
+    if CONFIG_FILE.exists():
+        for line in CONFIG_FILE.read_text().splitlines():
+            if line.startswith("OWNER_EMAIL="):
+                return line.split("=", 1)[1].strip()
+    return os.environ.get("VSM_OWNER_EMAIL", "")
 
 
 def get_logs_from_last_n_days(days=7):
@@ -175,26 +184,31 @@ def main():
     analysis = analyze_logs(logs)
     report = generate_report(analysis, state)
 
-    # Send email
-    try:
-        result = send_email("Weekly Status Report", report)
-
-        # Update state to track last report
-        state["last_weekly_report"] = datetime.now().isoformat()
-        STATE_FILE.write_text(json.dumps(state, indent=2))
-
-        print(json.dumps({
-            "sent": True,
-            "cycles_analyzed": analysis["total_cycles"],
-            "capabilities_shipped": len(analysis["capabilities_shipped"]),
-            "result": result
-        }))
-    except Exception as e:
-        print(json.dumps({
-            "sent": False,
-            "error": str(e)
-        }))
+    # Write report to outbox/ for Maildir to send
+    owner_email = _load_owner_email()
+    if not owner_email:
+        print(json.dumps({"sent": False, "error": "No OWNER_EMAIL in .env"}))
         sys.exit(1)
+
+    OUTBOX_DIR.mkdir(parents=True, exist_ok=True)
+    now = datetime.now()
+    thread_id = f"weekly-report-{now.strftime('%Y%m%d')}"
+    outfile = OUTBOX_DIR / f"{thread_id}.txt"
+    outfile.write_text(f"""Thread-ID: {thread_id}
+To: {owner_email}
+Subject: Weekly Status Report
+---
+{report}""")
+
+    # Update state to track last report
+    state["last_weekly_report"] = now.isoformat()
+    STATE_FILE.write_text(json.dumps(state, indent=2))
+
+    print(json.dumps({
+        "sent": True,
+        "cycles_analyzed": analysis["total_cycles"],
+        "capabilities_shipped": len(analysis["capabilities_shipped"]),
+    }))
 
 
 if __name__ == "__main__":

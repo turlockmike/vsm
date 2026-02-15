@@ -21,6 +21,12 @@ LOG_DIR = STATE_DIR / "logs"
 TASKS_DIR = VSM_ROOT / "sandbox" / "tasks"
 CLAUDE_BIN = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
 
+# Model selection strategy:
+# - Opus: Complex reasoning, architecture decisions, multi-step builds
+# - Sonnet: Standard feature development, code changes
+# - Haiku: Quick lookups, email replies, classification, simple tasks
+# The controller uses the model specified in state or defaults to opus
+
 # Observation memory paths — the system's long-term memory
 HOME_OBS = Path.home() / ".claude" / "projects" / "-home-mike" / "memory" / "observations.md"
 VSM_OBS_DIR = Path.home() / ".claude" / "projects" / "-home-mike-projects-vsm-main" / "memory"
@@ -31,7 +37,26 @@ def load_state():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     if STATE_FILE.exists():
-        return json.loads(STATE_FILE.read_text())
+        state = json.loads(STATE_FILE.read_text())
+        # Initialize token_usage if not present
+        if "token_usage" not in state:
+            state["token_usage"] = {
+                "total_input_tokens": 0,
+                "total_output_tokens": 0,
+                "cycles_tracked": 0,
+                "avg_input_per_cycle": 0,
+                "avg_output_per_cycle": 0,
+                "last_cycle_input": 0,
+                "last_cycle_output": 0,
+            }
+        if "token_budget" not in state:
+            state["token_budget"] = {
+                "daily_soft_cap": 1000000,  # 1M tokens/day soft cap
+                "today": datetime.now().date().isoformat(),
+                "today_input": 0,
+                "today_output": 0,
+            }
+        return state
     return {
         "criticality": 0.5,
         "last_mode": None,
@@ -40,6 +65,21 @@ def load_state():
         "errors": [],
         "health": {},
         "created": datetime.now().isoformat(),
+        "token_usage": {
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "cycles_tracked": 0,
+            "avg_input_per_cycle": 0,
+            "avg_output_per_cycle": 0,
+            "last_cycle_input": 0,
+            "last_cycle_output": 0,
+        },
+        "token_budget": {
+            "daily_soft_cap": 1000000,  # 1M tokens/day soft cap
+            "today": datetime.now().date().isoformat(),
+            "today_input": 0,
+            "today_output": 0,
+        },
     }
 
 
@@ -80,11 +120,24 @@ def check_health():
 
 
 def gather_tasks():
+    """Load tasks, filtering out blocked ones to save prompt tokens."""
     tasks = []
     if TASKS_DIR.exists():
         for f in sorted(TASKS_DIR.glob("*.json")):
             try:
-                tasks.append(json.loads(f.read_text()))
+                task = json.loads(f.read_text())
+                # Skip blocked tasks — they can't be acted on this cycle
+                if task.get("status") == "blocked":
+                    continue
+                # Slim down: only include fields System 5 needs
+                slim = {
+                    "id": task.get("id"),
+                    "title": task.get("title"),
+                    "description": task.get("description", "")[:300],
+                    "priority": task.get("priority", 5),
+                    "source": task.get("source"),
+                }
+                tasks.append(slim)
             except Exception:
                 pass
     return tasks
@@ -113,15 +166,21 @@ def gather_recent_logs(n=3):
 
 
 def load_observations():
-    """Load observational memory from both home scope and VSM project scope."""
+    """Load observational memory — token-budgeted.
+
+    Owner context is 30KB+; we only need the tail (most recent observations).
+    VSM cycle notes are small; keep all. Total target: <4KB (~1000 tokens).
+    """
     obs_parts = []
-    for obs_file, label in [(HOME_OBS, "owner-context"), (VSM_OBS, "vsm-cycles")]:
+    for obs_file, label, cap in [
+        (HOME_OBS, "owner-context", 2500),   # ~625 tokens
+        (VSM_OBS, "vsm-cycles", 1500),       # ~375 tokens
+    ]:
         if obs_file.exists() and obs_file.stat().st_size > 0:
             content = obs_file.read_text().strip()
             if content:
-                # Truncate if huge — keep most recent (end of file)
-                if len(content) > 15000:
-                    content = "[...truncated...]\n" + content[-15000:]
+                if len(content) > cap:
+                    content = "[...truncated...]\n" + content[-cap:]
                 obs_parts.append(f"[{label}]\n{content}")
     return "\n\n".join(obs_parts) if obs_parts else ""
 
@@ -135,59 +194,89 @@ def save_cycle_observation(cycle_count, mode, summary):
         f.write(entry)
 
 
+def _load_owner_email():
+    """Load owner email from .env file."""
+    config_file = VSM_ROOT / ".env"
+    if config_file.exists():
+        for line in config_file.read_text().splitlines():
+            if line.startswith("OWNER_EMAIL="):
+                return line.split("=", 1)[1].strip()
+    return os.environ.get("VSM_OWNER_EMAIL", "")
+
+
+def _alert_owner_via_outbox(subject, body):
+    """Write alert email to outbox/ for Maildir to send. No LLM, no API."""
+    owner = _load_owner_email()
+    if not owner:
+        return
+    outbox = VSM_ROOT / "outbox"
+    outbox.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    (outbox / f"alert_{ts}.txt").write_text(
+        f"Thread-ID: alert-{ts}\nTo: {owner}\nSubject: {subject}\n---\n{body}\n"
+    )
+
+
+def _slim_state(state):
+    """Extract only the fields System 5 needs for decision-making."""
+    return {
+        "cycle": state.get("cycle_count", 0),
+        "last_action": state.get("last_action", ""),
+        "criticality": state.get("criticality", 0.5),
+        "errors": len(state.get("errors", [])),
+        "last_error": state["errors"][-1].get("error") if state.get("errors") else None,
+    }
+
+
 def build_prompt(state, health, tasks, recent_logs, inbox_messages=None):
-    # Build urgent inbox section if owner emails are present
-    urgent_section = ""
+    # Email replies are handled by email_responder_v2.py (every 1 min via cron).
+    # Inbox messages here are read-only context for task prioritization.
+    context_section = ""
     if inbox_messages:
-        urgent_section = "## URGENT: Owner Emails — Reply NOW\n\n"
-        urgent_section += "The owner has sent you email(s). Reply to each one IMMEDIATELY using:\n"
-        urgent_section += "python3 /home/mike/projects/vsm/main/core/comm.py \"Re: <subject>\" \"<your reply>\"\n\n"
-        urgent_section += "Messages:\n"
+        context_section = "## Owner Context (already replied to by email responder)\n\n"
         for msg in inbox_messages:
-            urgent_section += "---\n"
-            urgent_section += f"Subject: {msg.get('subject', '(no subject)')}\n"
-            urgent_section += f"From: {msg.get('from', '(unknown)')}\n"
-            urgent_section += f"Body:\n{msg.get('body', '(empty)')}\n"
-            urgent_section += "---\n\n"
-        urgent_section += "Reply to ALL of these before doing anything else. Be helpful and concise.\n\n"
+            context_section += f"- **{msg.get('subject', '(no subject)')}**: {msg.get('body', '(empty)')[:150]}\n"
+        context_section += "\n"
 
     observations = load_observations()
     memory_section = ""
     if observations:
-        memory_section = f"## Memory (observations from previous sessions)\n{observations}\n\n"
+        memory_section = f"## Memory\n{observations}\n\n"
 
-    return f"""{urgent_section}{memory_section}You are System 5 — the lead coordinator of a Viable System Machine. Race against time.
+    slim = _slim_state(state)
+    # Only include health fields that matter for decisions
+    compact_health = {
+        "disk_pct": health.get("disk_pct_used", 0),
+        "mem_mb": health.get("mem_available_mb", 0),
+        "tasks": health.get("pending_tasks", 0),
+        "cron": health.get("cron_installed", False),
+    }
 
-Purpose: become the most useful autonomous system possible. Ship fast or fade.
-
-## Your Team
-
-You have subagents. Use the Task tool to delegate:
-- **builder**: Ships code fast. Give it a specific task, it builds and commits. (sonnet, 15 turns)
-- **researcher**: Investigates APIs, reads docs, scouts. Returns findings, builds nothing. (haiku, 10 turns)
-- **reviewer**: Audits health after changes. Quick integrity check. (haiku, 8 turns)
-
-Launch them in parallel when possible. You coordinate; they execute.
-
-## Situation
-State: {json.dumps(state)}
-Health: {json.dumps(health)}
+    return f"""{context_section}{memory_section}## Situation
+State: {json.dumps(slim)}
+Health: {json.dumps(compact_health)}
 Tasks: {json.dumps(tasks) if tasks else "None"}
-Recent history: {json.dumps(recent_logs) if recent_logs else "None"}
+Recent: {json.dumps(recent_logs) if recent_logs else "None"}
 
-## Your Protocol
-
-1. **Am I broken?** Quick check. If cron missing or errors > 3, fix first. Otherwise MOVE ON.
-2. **What's highest-value?** Check tasks. If none, decide what the system needs most.
-3. **Delegate.** Spawn builder/researcher as needed. Run them in parallel.
-4. **Log.** Write JSON to state/logs/<mode>_<YYYYMMDD_HHMMSS>.log (timestamp, mode, cycle={state['cycle_count']}, success, summary). Update state/state.json.
-
-Everything is evolvable — core/, .claude/agents/, this prompt, the cron.
-Branch first for core changes. Email owner via `python3 core/comm.py "subject" "body"`.
-Tasks in sandbox/tasks/. Work in ~/projects/vsm/main/.
-
-You are the coordinator. Don't do the work yourself — delegate and ship.
+Pick highest-value actionable task. Delegate to builder (sonnet) or researcher (haiku) via Task tool. Log to state/logs/. Commit before finishing.
 """
+
+
+def parse_token_usage(output_text):
+    """
+    Parse token usage from Claude Code output.
+    Returns dict with input_tokens and output_tokens, or None if not found.
+
+    For now, uses output length as a proxy since Claude Code doesn't expose
+    token counts in a parseable format via -p flag.
+    """
+    # Proxy: ~4 chars per token (rough estimate)
+    output_tokens_estimate = len(output_text) // 4
+    # Input token estimation would need the prompt length
+    return {
+        "output_tokens": output_tokens_estimate,
+        "input_tokens": 0,  # Can't measure without prompt visibility
+    }
 
 
 def run_claude(prompt, model="opus"):
@@ -220,32 +309,71 @@ def run_claude(prompt, model="opus"):
             cwd=str(VSM_ROOT),
             env=env,
         )
+
+        output = result.stdout
+        token_usage = parse_token_usage(output)
+
         return {
             "success": result.returncode == 0,
-            "output": result.stdout[:4000],
+            "output": output[:4000],
             "error": result.stderr[:1000] if result.returncode != 0 else None,
+            "model": model,
+            "token_usage": token_usage,
         }
     except subprocess.TimeoutExpired:
-        return {"success": False, "output": "", "error": "Timeout (300s)"}
+        return {"success": False, "output": "", "error": "Timeout (300s)", "model": model}
     except Exception as e:
-        return {"success": False, "output": "", "error": str(e)}
+        return {"success": False, "output": "", "error": str(e), "model": model}
+
+
+def _strip_quoted_text(body):
+    """Remove email signatures and quoted replies to save tokens."""
+    lines = body.split("\n")
+    clean = []
+    for line in lines:
+        # Stop at quoted text markers
+        if line.startswith(">") or line.startswith("On ") and "wrote:" in line:
+            break
+        # Stop at signature markers
+        if line.strip() in ("--", "---", "-----------------------------"):
+            break
+        clean.append(line)
+    return "\n".join(clean).strip()
 
 
 def process_inbox():
-    """Run inbox processor to convert owner emails into tasks."""
-    try:
-        result = subprocess.run(
-            ["python3", str(VSM_ROOT / "sandbox" / "tools" / "process_inbox.py")],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            cwd=str(VSM_ROOT),
-        )
-        if result.returncode == 0:
-            return json.loads(result.stdout)
-        return {"error": result.stderr}
-    except Exception as e:
-        return {"error": str(e)}
+    """Read owner emails from inbox/ for context injection. Zero API calls."""
+    inbox_dir = VSM_ROOT / "inbox"
+    if not inbox_dir.exists():
+        return {"created_tasks": []}
+
+    messages = []
+    for filepath in sorted(inbox_dir.glob("*.txt")):
+        try:
+            content = filepath.read_text()
+            email = {}
+            body_lines = []
+            in_body = False
+            for line in content.split("\n"):
+                if line.strip() == "---":
+                    in_body = True
+                    continue
+                if in_body:
+                    body_lines.append(line)
+                elif line.startswith("Subject:"):
+                    email["subject"] = line.split(":", 1)[1].strip()
+                elif line.startswith("Thread-ID:"):
+                    email["thread_id"] = line.split(":", 1)[1].strip()
+            raw_body = "\n".join(body_lines).strip()
+            email["body"] = _strip_quoted_text(raw_body)
+            if email.get("subject"):
+                messages.append(email)
+        except Exception:
+            pass
+
+    if messages:
+        return {"messages": messages}
+    return {}
 
 
 def check_weekly_report(state):
@@ -285,28 +413,12 @@ def main():
     health = check_health()
     state["health"] = health
 
-    # Process inbox before gathering tasks (new emails → tasks)
+    # Read inbox emails from filesystem (Maildir) for context injection
     inbox_result = process_inbox()
-    inbox_messages = None
+    inbox_messages = inbox_result.get("messages")
 
-    if inbox_result.get("created_tasks"):
-        print(f"[VSM] Inbox: {len(inbox_result['created_tasks'])} new tasks from owner")
-
-        # Read the task files to extract email content for immediate injection
-        inbox_messages = []
-        for created_task in inbox_result["created_tasks"]:
-            task_file_path = Path(created_task.get("file"))
-            if task_file_path.exists():
-                try:
-                    task_data = json.loads(task_file_path.read_text())
-                    inbox_messages.append({
-                        "subject": task_data.get("title", "(no subject)"),
-                        "from": task_data.get("from", "(unknown)"),
-                        "body": task_data.get("description", "(empty)"),
-                        "thread_id": task_data.get("thread_id"),
-                    })
-                except Exception as e:
-                    print(f"[VSM] Warning: failed to read task {task_file_path}: {e}")
+    if inbox_messages:
+        print(f"[VSM] Inbox: {len(inbox_messages)} emails loaded from filesystem")
 
     # Check if weekly report should be sent
     if check_weekly_report(state):
@@ -328,6 +440,49 @@ def main():
     prompt = build_prompt(state, health, tasks, recent_logs, inbox_messages)
     result = run_claude(prompt)
 
+    # Track token usage
+    if result.get("token_usage"):
+        tokens = result["token_usage"]
+        usage = state.setdefault("token_usage", {
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "cycles_tracked": 0,
+            "avg_input_per_cycle": 0,
+            "avg_output_per_cycle": 0,
+            "last_cycle_input": 0,
+            "last_cycle_output": 0,
+        })
+
+        # Update totals
+        usage["total_input_tokens"] += tokens.get("input_tokens", 0)
+        usage["total_output_tokens"] += tokens.get("output_tokens", 0)
+        usage["cycles_tracked"] += 1
+        usage["last_cycle_input"] = tokens.get("input_tokens", 0)
+        usage["last_cycle_output"] = tokens.get("output_tokens", 0)
+
+        # Update averages
+        if usage["cycles_tracked"] > 0:
+            usage["avg_input_per_cycle"] = usage["total_input_tokens"] // usage["cycles_tracked"]
+            usage["avg_output_per_cycle"] = usage["total_output_tokens"] // usage["cycles_tracked"]
+
+        # Track daily budget
+        budget = state.setdefault("token_budget", {
+            "daily_soft_cap": 1000000,
+            "today": datetime.now().date().isoformat(),
+            "today_input": 0,
+            "today_output": 0,
+        })
+
+        today = datetime.now().date().isoformat()
+        if budget["today"] != today:
+            # New day, reset daily counters
+            budget["today"] = today
+            budget["today_input"] = 0
+            budget["today_output"] = 0
+
+        budget["today_input"] += tokens.get("input_tokens", 0)
+        budget["today_output"] += tokens.get("output_tokens", 0)
+
     # === Minimal post-processing ===
     # The controller does NOT interpret the result or update state —
     # that's System 5's job (instructed in the prompt above).
@@ -336,6 +491,7 @@ def main():
         state["errors"].append({
             "time": datetime.now().isoformat(),
             "error": result.get("error", "unknown"),
+            "model": result.get("model", "unknown"),
         })
         state["errors"] = state["errors"][-10:]
         state["health"] = health
@@ -343,20 +499,14 @@ def main():
 
         print(f"[VSM] FAILED: {result.get('error', 'unknown')}")
 
-        # Alert if failures are accumulating
+        # Alert if failures are accumulating — write to outbox for Maildir to send
         if len(state["errors"]) >= 5:
             try:
-                import sys as _sys
-                sys_path = str(VSM_ROOT / "core")
-                if sys_path not in _sys.path:
-                    _sys.path.insert(0, sys_path)
-                from comm import send_email
-                send_email(
+                _alert_owner_via_outbox(
                     "System 5 repeated failures",
-                    f"VSM has had {len(state['errors'])} consecutive System 5 failures.\n\n"
+                    f"VSM has had {len(state['errors'])} consecutive failures.\n"
                     f"Latest: {result.get('error')}\n"
-                    f"Cycle: {state['cycle_count']}\n\n"
-                    f"The system may need intervention."
+                    f"Cycle: {state['cycle_count']}"
                 )
             except Exception:
                 pass
@@ -378,7 +528,14 @@ def main():
                 )
             except Exception:
                 pass
-        print(f"[VSM] System 5 completed cycle. Output preview:")
+
+        # Log token usage if available
+        token_info = ""
+        if result.get("token_usage"):
+            tokens = result["token_usage"]
+            token_info = f" | Tokens (est): out={tokens.get('output_tokens', 0)}"
+
+        print(f"[VSM] System 5 completed cycle{token_info}. Output preview:")
         print(result["output"][:500])
 
 

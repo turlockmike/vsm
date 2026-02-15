@@ -51,3 +51,12 @@ You can also create NEW agents in .claude/agents/ when needed. Evolve the team.
 2. What's highest-value? Check tasks, or decide what moves the product forward most.
 3. Delegate to team. Ship it. Commit it.
 4. Log to state/logs/ and update state/state.json.
+
+## Cost Discipline
+
+**Token budget is critical.** Owner flagged cost as #1 pain point. Be ruthlessly efficient:
+
+- **Terse output in autonomous mode**: Limit responses to <500 tokens. Details go in logs, not stdout.
+- **Prefer sonnet over opus**: Default to sonnet for routine work. Only use opus for complex reasoning.
+- **Execute simple tasks directly**: Don't delegate trivial edits/reads to subagents.
+- **Cache-friendly prompts**: Reuse prompt structure across cycles to maximize cache hits.

@@ -1,0 +1,11 @@
+{
+  "id": 33,
+  "title": "Execute Show HN Launch",
+  "description": "VSM is launch-ready. All pre-launch checklist items complete (install.sh tested, dashboard running, security audit done, demo GIF working, no debug cruft).\n\nOwner action required:\n\n1. **Pick Show HN title** (see docs/show_hn_draft.md, recommend Option 1)\n2. **Pick post body** (recommend Draft A - detailed technical)\n3. **Set launch date** (recommend Tuesday 2026-02-18 at 8:30am PST)\n4. **Post to HN manually** at https://news.ycombinator.com/submit\n   - URL: https://github.com/turlockmike/vsm\n   - Title: [selected option]\n   - Text: [selected draft]\n5. **Post first comment immediately** (technical details from draft)\n6. **Monitor for 6 hours**, respond to all comments within 2 hours\n\nPre-written Q&A available in docs/show_hn_draft.md for common questions (cost, AutoGPT comparison, safety, roadmap).\n\nSuccess metrics: 50+ upvotes, front page 4+ hours, 10+ GitHub stars.\n\nVSM will monitor GitHub stars/traffic and queue follow-up tasks (issue triage, bug fixes) autonomously during launch.\n\nContext: Intelligence scan (cycle 18) found 12+ competing autonomous systems launching daily. Window to capture 'first Claude Code-native autonomous system' positioning is NOW.",
+  "priority": 10,
+  "status": "blocked",
+  "created_at": "2026-02-15T04:56:00Z",
+  "blocks": [],
+  "blocked_by": ["owner_decision_required"],
+  "tags": ["launch", "marketing", "owner-action"]
+}

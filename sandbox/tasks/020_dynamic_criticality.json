@@ -1,0 +1,11 @@
+{
+  "id": "020",
+  "title": "Implement dynamic criticality computation",
+  "description": "Criticality is currently a static 0.3 that never changes. It should be a live signal computed from existing state/health data every cycle.\n\nDesign (from plan at ~/.claude/plans/twinkling-beaming-puzzle.md):\n\n1. Add compute_criticality(state, health) function to core/controller.py\n2. Maps Beer's VSM to a 0.0-1.0 spectrum:\n   - 0.0 = chaos (failures, broken infra) -> stabilize\n   - 0.5 = viable (healthy tension) -> ship\n   - 1.0 = stagnant (nothing failing, nothing shipping) -> shake things up\n3. Chaos inputs: _recent_failure_count(), cron_installed, disk_pct_used, mem_available_mb\n4. Stagnation inputs: time since last success, pending task backlog, cycle throughput vs system age\n5. Call in main() after check_health(), before build_prompt(): state['criticality'] = compute_criticality(state, health)\n6. Add one-line interpretation hint to build_prompt() so System 5 knows what the number means\n\nOne file (controller.py), one function, two insertion points. All inputs already exist.",
+  "priority": 7,
+  "source": "owner-directive",
+  "status": "completed",
+  "created": "2026-02-14T21:30:00",
+  "completed": "2026-02-14T18:30:00",
+  "result": "Shipped compute_criticality() in controller.py. Live signal computed every cycle from existing state/health data. Current criticality: 0.39 (pulling toward chaos due to 5 recent timeout errors - working as designed). Interpretation hint added to System 5 prompt."
+}

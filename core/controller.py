@@ -55,10 +55,14 @@ def load_state():
         if "token_budget" not in state:
             state["token_budget"] = {
                 "daily_soft_cap": 1000000,  # 1M tokens/day soft cap
+                "daily_soft_cap_usd": 10.0,  # $10/day USD cap (owner cost priority)
                 "today": datetime.now().date().isoformat(),
                 "today_input": 0,
                 "today_output": 0,
             }
+        # Ensure USD cap exists for existing states
+        if "daily_soft_cap_usd" not in state["token_budget"]:
+            state["token_budget"]["daily_soft_cap_usd"] = 10.0
         return state
     return {
         "criticality": 0.5,
@@ -79,6 +83,7 @@ def load_state():
         },
         "token_budget": {
             "daily_soft_cap": 1000000,  # 1M tokens/day soft cap
+            "daily_soft_cap_usd": 10.0,  # $10/day USD cap (owner cost priority)
             "today": datetime.now().date().isoformat(),
             "today_input": 0,
             "today_output": 0,
@@ -454,6 +459,34 @@ def compute_criticality(state, health):
     return round(max(0.0, min(1.0, criticality)), 2)
 
 
+def _load_agents():
+    """Load custom agent definitions from .claude/agents/ directory."""
+    agents_dir = VSM_ROOT / ".claude" / "agents"
+    if not agents_dir.exists():
+        return None
+
+    agents = {}
+    for agent_file in agents_dir.glob("*.md"):
+        try:
+            content = agent_file.read_text()
+            # Parse frontmatter (simplified)
+            if content.startswith("---"):
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    # Extract name from frontmatter
+                    for line in parts[1].split("\n"):
+                        if line.startswith("name:"):
+                            name = line.split(":", 1)[1].strip()
+                            agents[name] = {
+                                "description": f"Custom agent from {agent_file.name}",
+                                "prompt": parts[2].strip()
+                            }
+        except Exception:
+            pass
+
+    return json.dumps(agents) if agents else None
+
+
 def run_claude(prompt, model="opus", timeout=300):
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
@@ -480,6 +513,42 @@ def run_claude(prompt, model="opus", timeout=300):
     mcp_config = VSM_ROOT / ".mcp.json"
     if mcp_config.exists():
         cmd.extend(["--mcp-config", str(mcp_config)])
+
+    # --- Claude Code Feature Enhancements ---
+
+    # 1. Budget control — prevent runaway costs (owner's #1 pain point)
+    # Use state budget to compute per-cycle limit
+    state = load_state()
+    budget = state.get("token_budget", {})
+    today_cost = budget.get("today_cost_usd", 0)
+    daily_cap = budget.get("daily_soft_cap_usd", 10.0)  # $10/day default
+    remaining = max(daily_cap - today_cost, 0.5)  # At least $0.50 per cycle
+    per_cycle_max = min(remaining / 4, 2.0)  # Reserve for 4 more cycles, cap at $2
+    cmd.extend(["--max-budget-usd", str(round(per_cycle_max, 2))])
+
+    # 2. Fallback model — auto-downgrade on overload instead of manual logic
+    fallback = "sonnet" if model == "opus" else "haiku"
+    cmd.extend(["--fallback-model", fallback])
+
+    # 3. Effort tuning — low for simple tasks, medium for standard, high for complex
+    # Detect simple tasks based on prompt length and task count
+    effort = "medium"  # default
+    if len(prompt) < 500:
+        effort = "low"  # Quick tasks (status checks, simple edits)
+    elif "complex" in prompt.lower() or "architecture" in prompt.lower():
+        effort = "high"  # Explicitly flagged complex work
+    cmd.extend(["--effort", effort])
+
+    # 4. Custom agents — load from .claude/agents/ directory
+    agents_json = _load_agents()
+    if agents_json:
+        cmd.extend(["--agents", agents_json])
+
+    # 5. Tool restrictions — save tokens and improve safety
+    # For read-only operations, restrict write tools
+    # For now, use default tools but prepare for future filtering
+    # Example: cmd.extend(["--tools", "Read,Grep,Glob,Bash(git:*)"])
+    # Leaving this for future enhancement based on cycle type detection
 
     try:
         result = subprocess.run(
@@ -770,11 +839,15 @@ def main():
         # Track daily budget
         budget = state.setdefault("token_budget", {
             "daily_soft_cap": 1000000,
+            "daily_soft_cap_usd": 10.0,
             "today": datetime.now().date().isoformat(),
             "today_input": 0,
             "today_output": 0,
             "today_cost_usd": 0.0,
         })
+        # Ensure USD cap exists
+        if "daily_soft_cap_usd" not in budget:
+            budget["daily_soft_cap_usd"] = 10.0
 
         today = datetime.now().date().isoformat()
         if budget["today"] != today:

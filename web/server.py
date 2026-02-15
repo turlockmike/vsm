@@ -9,6 +9,7 @@ import os
 import glob
 import time
 import threading
+import subprocess
 from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
@@ -20,6 +21,7 @@ STATE_FILE = VSM_ROOT / "state" / "state.json"
 TASKS_DIR = VSM_ROOT / "sandbox" / "tasks"
 LOGS_DIR = VSM_ROOT / "state" / "logs"
 OUTBOX_DIR = VSM_ROOT / "sandbox" / "outbox"
+CHAT_HISTORY_FILE = VSM_ROOT / "state" / "chat_history.json"
 
 # Track state file modification time for SSE
 last_state_mtime = 0
@@ -46,6 +48,8 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.serve_mcp()
         elif self.path == '/api/events':
             self.serve_events()
+        elif self.path == '/api/chat/history':
+            self.serve_chat_history()
         else:
             # Serve static files
             super().do_GET()
@@ -56,6 +60,8 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.create_task()
         elif self.path == '/api/command':
             self.handle_command()
+        elif self.path == '/api/chat':
+            self.handle_chat()
         else:
             self.send_error(404, "Not Found")
 
@@ -72,6 +78,14 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.delete_task()
         else:
             self.send_error(404, "Not Found")
+
+    def do_OPTIONS(self):
+        """Handle OPTIONS requests for CORS"""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
 
     def serve_state(self):
         """Serve state.json"""
@@ -436,6 +450,113 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps({'success': False, 'output': f"Error: {str(e)}"}).encode())
+
+    def serve_chat_history(self):
+        """Serve chat history"""
+        try:
+            if CHAT_HISTORY_FILE.exists():
+                with open(CHAT_HISTORY_FILE, 'r') as f:
+                    history = json.load(f)
+            else:
+                history = {"messages": []}
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(history).encode())
+        except Exception as e:
+            self.send_error(500, f"Error reading chat history: {e}")
+
+    def handle_chat(self):
+        """Handle chat interface requests"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            body = self.rfile.read(content_length)
+            data = json.loads(body)
+
+            message = data.get('message', '').strip()
+            if not message:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'response': 'Empty message'}).encode())
+                return
+
+            # Build prompt for Claude
+            prompt = f"You are VSM, an autonomous AI system. The user is your owner asking a question via the web dashboard. Be concise and helpful. Their message: {message}"
+
+            # Call claude CLI
+            try:
+                result = subprocess.run(
+                    ['claude', '-p', prompt, '--max-turns', '3'],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    cwd=str(VSM_ROOT)
+                )
+
+                if result.returncode == 0:
+                    response = result.stdout.strip()
+                    if not response:
+                        response = "VSM processed your message but produced no output."
+                else:
+                    response = f"Error: Claude returned code {result.returncode}\n{result.stderr}"
+
+            except subprocess.TimeoutExpired:
+                response = "Error: Request timed out after 60 seconds"
+            except FileNotFoundError:
+                response = "Error: claude CLI not found"
+            except Exception as e:
+                response = f"Error: {str(e)}"
+
+            # Save to chat history
+            timestamp = datetime.now().isoformat(timespec='seconds')
+            self._save_chat_message('owner', message, timestamp)
+            self._save_chat_message('vsm', response, timestamp)
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': True, 'response': response}).encode())
+
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': False, 'response': f"Error: {str(e)}"}).encode())
+
+    def _save_chat_message(self, role, content, timestamp):
+        """Save a message to chat history"""
+        try:
+            # Load existing history
+            if CHAT_HISTORY_FILE.exists():
+                with open(CHAT_HISTORY_FILE, 'r') as f:
+                    history = json.load(f)
+            else:
+                history = {"messages": []}
+
+            # Add new message
+            history["messages"].append({
+                "role": role,
+                "content": content,
+                "timestamp": timestamp
+            })
+
+            # Keep only last 50 messages
+            if len(history["messages"]) > 50:
+                history["messages"] = history["messages"][-50:]
+
+            # Save
+            CHAT_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(CHAT_HISTORY_FILE, 'w') as f:
+                json.dump(history, f, indent=2)
+
+        except Exception as e:
+            print(f"Error saving chat message: {e}")
 
     def get_next_task_id(self):
         """Find the next available task ID"""

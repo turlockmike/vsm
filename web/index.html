@@ -317,53 +317,103 @@
             overflow: hidden;
         }
 
-        /* Command Terminal */
-        .terminal-container {
-            margin-top: 20px;
+        /* Chat Interface */
+        .chat-container {
+            margin-bottom: 20px;
         }
-        .terminal {
+        .chat-messages {
+            min-height: 300px;
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 10px;
             background: #000;
-            border: 1px solid #00ff00;
-            border-radius: 8px;
-            padding: 15px;
-            min-height: 200px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            margin-bottom: 10px;
             display: flex;
             flex-direction: column;
+            gap: 10px;
         }
-        .terminal-output {
-            flex: 1;
-            overflow-y: auto;
-            max-height: 200px;
-            margin-bottom: 10px;
-            font-size: 0.85em;
-        }
-        .terminal-line {
-            margin: 2px 0;
-            color: #00ff00;
-        }
-        .terminal-line.error {
-            color: #ff6666;
-        }
-        .terminal-line.command {
-            color: #00ccff;
-        }
-        .terminal-input-line {
+        .chat-msg {
             display: flex;
-            align-items: center;
-            gap: 5px;
+            flex-direction: column;
+            max-width: 80%;
         }
-        .terminal-prompt {
+        .chat-msg.owner {
+            align-self: flex-end;
+        }
+        .chat-msg.vsm {
+            align-self: flex-start;
+        }
+        .chat-bubble {
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.9em;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .chat-msg.owner .chat-bubble {
+            background: #0044aa;
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+        .chat-msg.vsm .chat-bubble {
+            background: #1a3a1a;
             color: #00ff00;
-            font-weight: bold;
+            border-bottom-left-radius: 4px;
         }
-        .terminal-input {
+        .chat-time {
+            font-size: 0.7em;
+            color: #555;
+            margin-top: 3px;
+            padding: 0 5px;
+        }
+        .chat-msg.owner .chat-time {
+            text-align: right;
+        }
+        .chat-thinking {
+            color: #888;
+            font-style: italic;
+            padding: 5px;
+            animation: pulse 1.5s infinite;
+        }
+        .chat-input-row {
+            display: flex;
+            gap: 10px;
+        }
+        .chat-input {
             flex: 1;
-            background: transparent;
-            border: none;
+            padding: 12px;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 8px;
             color: #00ff00;
             font-family: 'Courier New', monospace;
             font-size: 1em;
             outline: none;
+        }
+        .chat-input:focus {
+            border-color: #00ff00;
+        }
+        .chat-send {
+            padding: 12px 24px;
+            background: #00cc00;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+        }
+        .chat-send:hover {
+            background: #00ff00;
+        }
+        .chat-send:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
         }
 
         /* Footer */
@@ -562,19 +612,18 @@
             </div>
         </div>
 
-        <div class="card terminal-container">
-            <h2>Command Interface</h2>
-            <div class="terminal">
-                <div class="terminal-output" id="terminal-output">
-                    <div class="terminal-line">VSM Command Interface v0.1</div>
-                    <div class="terminal-line">Available: task add &lt;title&gt;, task list, status, email &lt;subject&gt; | &lt;body&gt;</div>
-                    <div class="terminal-line">Type a command and press Enter...</div>
+        <div class="card chat-container">
+            <h2>Chat with VSM</h2>
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-msg vsm">
+                    <div class="chat-bubble">VSM online. Ask me anything or use /commands.</div>
+                    <div class="chat-time">System</div>
                 </div>
-                <div class="terminal-input-line">
-                    <span class="terminal-prompt">&gt;</span>
-                    <input type="text" class="terminal-input" id="terminal-input"
-                           placeholder="Enter command..." autocomplete="off">
-                </div>
+            </div>
+            <div class="chat-input-row">
+                <input type="text" class="chat-input" id="chat-input"
+                       placeholder="Ask VSM something..." autocomplete="off">
+                <button class="chat-send" id="chat-send" onclick="sendChat()">Send</button>
             </div>
         </div>
 
@@ -587,8 +636,7 @@
 
     <script>
         let eventSource = null;
-        let commandHistory = [];
-        let historyIndex = -1;
+        let chatHistory = [];
         let previousValues = {};
         const startTime = Date.now();
 
@@ -791,13 +839,12 @@
 
                 const result = await response.json();
                 if (result.success) {
-                    addTerminalLine(`Task #${taskId} priority updated to ${newPriority}`, 'ok');
                     await updateTasks();
                 } else {
-                    addTerminalLine(`Error updating task: ${result.error}`, 'error');
+                    console.error('Error updating task:', result.error);
                 }
             } catch (error) {
-                addTerminalLine(`Error updating task: ${error.message}`, 'error');
+                console.error('Error updating task:', error);
             }
         }
 
@@ -815,13 +862,12 @@
 
                 const result = await response.json();
                 if (result.success) {
-                    addTerminalLine(`Task #${taskId} deleted`, 'ok');
                     await updateTasks();
                 } else {
-                    addTerminalLine(`Error deleting task: ${result.error}`, 'error');
+                    console.error('Error deleting task:', result.error);
                 }
             } catch (error) {
-                addTerminalLine(`Error deleting task: ${error.message}`, 'error');
+                console.error('Error deleting task:', error);
             }
         }
 
@@ -847,99 +893,127 @@
                     document.getElementById('task-description').value = '';
                     document.getElementById('task-priority').value = '5';
 
-                    addTerminalLine(`Task #${result.task.id} created: ${title}`, 'ok');
-
                     // Refresh tasks
                     await updateTasks();
                 } else {
-                    addTerminalLine(`Error adding task: ${result.error}`, 'error');
+                    console.error('Error adding task:', result.error);
                 }
             } catch (error) {
-                addTerminalLine(`Error adding task: ${error.message}`, 'error');
+                console.error('Error adding task:', error);
             }
         }
 
-        function addTerminalLine(text, type = 'normal') {
-            const output = document.getElementById('terminal-output');
-            const line = document.createElement('div');
-            line.className = 'terminal-line' + (type === 'error' ? ' error' : type === 'command' ? ' command' : '');
-            line.textContent = text;
-            output.appendChild(line);
-            output.scrollTop = output.scrollHeight;
-
-            // Keep only last 50 lines
-            while (output.children.length > 50) {
-                output.removeChild(output.firstChild);
+        async function loadChatHistory() {
+            try {
+                const res = await fetch('/api/chat/history');
+                const data = await res.json();
+                chatHistory = data.messages || [];
+                const container = document.getElementById('chat-messages');
+                // Keep the system message
+                chatHistory.forEach(msg => {
+                    appendChatMessage(msg.role, msg.content, msg.timestamp, false);
+                });
+                scrollChat();
+            } catch (e) {
+                console.error('Failed to load chat history:', e);
             }
         }
 
-        async function executeCommand(command) {
-            if (!command.trim()) return;
+        function appendChatMessage(role, content, timestamp, scroll = true) {
+            const container = document.getElementById('chat-messages');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'chat-msg ' + (role === 'owner' ? 'owner' : 'vsm');
 
-            // Add to history
-            commandHistory.unshift(command);
-            if (commandHistory.length > 10) {
-                commandHistory.pop();
-            }
-            historyIndex = -1;
+            const bubble = document.createElement('div');
+            bubble.className = 'chat-bubble';
+            bubble.textContent = content;
 
-            // Display command
-            addTerminalLine(`> ${command}`, 'command');
+            const time = document.createElement('div');
+            time.className = 'chat-time';
+            time.textContent = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
 
-            // Handle 'status' locally for instant feedback
-            if (command === 'status') {
-                await updateStatus();
-                addTerminalLine('Status refreshed', 'ok');
+            msgDiv.appendChild(bubble);
+            msgDiv.appendChild(time);
+            container.appendChild(msgDiv);
+
+            if (scroll) scrollChat();
+        }
+
+        function scrollChat() {
+            const container = document.getElementById('chat-messages');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function showThinking() {
+            const container = document.getElementById('chat-messages');
+            const thinking = document.createElement('div');
+            thinking.className = 'chat-thinking';
+            thinking.id = 'chat-thinking';
+            thinking.textContent = 'VSM is thinking...';
+            container.appendChild(thinking);
+            scrollChat();
+        }
+
+        function hideThinking() {
+            const el = document.getElementById('chat-thinking');
+            if (el) el.remove();
+        }
+
+        async function sendChat() {
+            const input = document.getElementById('chat-input');
+            const sendBtn = document.getElementById('chat-send');
+            const message = input.value.trim();
+            if (!message) return;
+
+            input.value = '';
+            sendBtn.disabled = true;
+
+            // Show owner message
+            appendChatMessage('owner', message);
+
+            // Check for /commands
+            if (message.startsWith('/')) {
+                const cmd = message.substring(1);
+                try {
+                    const response = await fetch('/api/command', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ command: cmd })
+                    });
+                    const result = await response.json();
+                    appendChatMessage('vsm', result.output);
+                    if (cmd.startsWith('task')) await updateTasks();
+                } catch (error) {
+                    appendChatMessage('vsm', 'Error: ' + error.message);
+                }
+                sendBtn.disabled = false;
                 return;
             }
 
+            // Send to chat API
+            showThinking();
             try {
-                const response = await fetch('/api/command', {
+                const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command })
+                    body: JSON.stringify({ message })
                 });
-
+                hideThinking();
                 const result = await response.json();
-
-                if (result.success) {
-                    result.output.split('\n').forEach(line => {
-                        addTerminalLine(line, 'ok');
-                    });
-
-                    // Refresh UI if needed
-                    if (command.startsWith('task')) {
-                        await updateTasks();
-                    }
-                } else {
-                    addTerminalLine(result.output, 'error');
-                }
+                appendChatMessage('vsm', result.response);
             } catch (error) {
-                addTerminalLine(`Error: ${error.message}`, 'error');
+                hideThinking();
+                appendChatMessage('vsm', 'Error: ' + error.message);
             }
+            sendBtn.disabled = false;
+            input.focus();
         }
 
-        // Terminal input handling
-        document.getElementById('terminal-input').addEventListener('keydown', async function(e) {
-            if (e.key === 'Enter') {
-                const command = this.value;
-                this.value = '';
-                await executeCommand(command);
-            } else if (e.key === 'ArrowUp') {
+        // Chat input enter key
+        document.getElementById('chat-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (historyIndex < commandHistory.length - 1) {
-                    historyIndex++;
-                    this.value = commandHistory[historyIndex];
-                }
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (historyIndex > 0) {
-                    historyIndex--;
-                    this.value = commandHistory[historyIndex];
-                } else if (historyIndex === 0) {
-                    historyIndex = -1;
-                    this.value = '';
-                }
+                sendChat();
             }
         });
 
@@ -1004,6 +1078,7 @@
         // Initialize
         updateStatus();
         updateMCP();
+        loadChatHistory();
         connectSSE();
 
         // Update uptime every minute

@@ -9,6 +9,11 @@ Watches git repositories for common issues:
 - Large files accidentally staged
 - Unresolved TODO/FIXME in recent changes
 
+FOCUS-AWARE MODE:
+- Detects active window/app context
+- Boosts priority for tasks in currently-active projects
+- Logs context changes to state/logs/window_context.log
+
 Creates VSM tasks with actionable suggestions.
 """
 
@@ -18,6 +23,15 @@ import json
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
+
+# Import window monitor
+VSM_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(VSM_ROOT / "core"))
+try:
+    from window_monitor import get_active_window_context, is_available as window_monitor_available
+    WINDOW_MONITOR_ENABLED = True
+except ImportError:
+    WINDOW_MONITOR_ENABLED = False
 
 
 def run_cmd(cmd, cwd=None):
@@ -36,7 +50,48 @@ def run_cmd(cmd, cwd=None):
         return "", str(e), 1
 
 
-def check_uncommitted_work(project_path):
+def _is_active_project(project_path, active_context):
+    """Check if project matches the active window context."""
+    if not active_context or not active_context.get('project_path'):
+        return False
+
+    project = Path(project_path).resolve()
+    active = Path(active_context['project_path']).resolve()
+
+    # Match if same directory or active is a subdirectory
+    return project == active or project in active.parents
+
+
+def _log_window_context(context):
+    """Log window context change to state/logs/window_context.log"""
+    log_dir = VSM_ROOT / "state" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "window_context.log"
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    entry = {
+        "timestamp": timestamp,
+        "app": context.get("app_name", "unknown"),
+        "window": context.get("window_title", "")[:100],  # truncate
+        "project": context.get("project_path")
+    }
+
+    # Append to log (keep last 100 entries)
+    try:
+        if log_file.exists():
+            content = log_file.read_text()
+            lines = content.strip().split('\n')
+            lines = lines[-99:]  # Keep last 99
+        else:
+            lines = []
+
+        lines.append(json.dumps(entry))
+        log_file.write_text('\n'.join(lines) + '\n')
+    except Exception:
+        pass
+
+
+def check_uncommitted_work(project_path, active_context=None):
     """Detect uncommitted changes sitting >1h"""
     stdout, stderr, code = run_cmd("git status --porcelain", cwd=project_path)
 
@@ -72,12 +127,18 @@ def check_uncommitted_work(project_path):
     if age_hours < 1.0:
         return None
 
+    # Focus-aware priority boost
+    priority = 'medium' if age_hours > 4 else 'low'
+    if active_context and _is_active_project(project_path, active_context):
+        priority = 'high'  # User is actively working on this — boost priority
+
     return {
         'type': 'uncommitted_work',
-        'priority': 'medium' if age_hours > 4 else 'low',
+        'priority': priority,
         'title': f'Uncommitted work in {Path(project_path).name} ({int(age_hours)}h {int((age_hours % 1) * 60)}m old)',
         'description': f'Found {len(lines)} modified/staged files:\n' + '\n'.join(f'  - {l.strip()}' for l in lines[:10]),
-        'suggested_action': f'Review and commit changes in {project_path}'
+        'suggested_action': f'Review and commit changes in {project_path}',
+        'focus_boosted': active_context and _is_active_project(project_path, active_context)
     }
 
 
@@ -235,7 +296,7 @@ def create_vsm_task(finding, project_path):
     return task_id
 
 
-def watch_project(project_path):
+def watch_project(project_path, active_context=None):
     """Run all checks on a project"""
     project_path = Path(project_path).resolve()
 
@@ -248,24 +309,32 @@ def watch_project(project_path):
         print(f"Skipping {project_path} (not a git repository)", file=sys.stderr)
         return []
 
-    print(f"Watching {project_path}...")
+    is_active = active_context and _is_active_project(project_path, active_context)
+    status = " [ACTIVE]" if is_active else ""
+    print(f"Watching {project_path}{status}...")
 
-    checks = [
-        check_uncommitted_work,
-        check_large_files,
-        check_todos,
-        check_npm_vulnerabilities,
-        check_pip_vulnerabilities
+    # Pass active context to checks that support priority boosting
+    findings = []
+    checks_with_context = [
+        (check_uncommitted_work, True),
+        (check_large_files, False),
+        (check_todos, False),
+        (check_npm_vulnerabilities, False),
+        (check_pip_vulnerabilities, False)
     ]
 
-    findings = []
-    for check_fn in checks:
+    for check_fn, supports_context in checks_with_context:
         try:
-            result = check_fn(project_path)
+            if supports_context:
+                result = check_fn(project_path, active_context)
+            else:
+                result = check_fn(project_path)
+
             if result:
                 findings.append(result)
                 task_id = create_vsm_task(result, project_path)
-                print(f"  [{result['priority'].upper()}] {result['title']} -> {task_id}")
+                boost = " (focus-boosted)" if result.get('focus_boosted') else ""
+                print(f"  [{result['priority'].upper()}] {result['title']} -> {task_id}{boost}")
         except Exception as e:
             print(f"  Error in {check_fn.__name__}: {e}", file=sys.stderr)
 
@@ -277,17 +346,42 @@ def watch_project(project_path):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: project_watcher.py <project_path>", file=sys.stderr)
+        print("Usage: project_watcher.py <project_path> [--focus-aware]", file=sys.stderr)
         print("\nExample:", file=sys.stderr)
         print("  project_watcher.py ~/projects/myapp", file=sys.stderr)
         print("  project_watcher.py ~/projects  # watches all subdirs with .git", file=sys.stderr)
+        print("  project_watcher.py ~/projects --focus-aware  # boost priority for active projects", file=sys.stderr)
         sys.exit(1)
 
-    target = Path(sys.argv[1]).resolve()
+    # Check for focus-aware flag
+    focus_aware = "--focus-aware" in sys.argv
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+
+    if len(args) < 1:
+        print("Error: missing project path argument", file=sys.stderr)
+        sys.exit(1)
+
+    target = Path(args[0]).resolve()
 
     if not target.exists():
         print(f"Error: {target} does not exist", file=sys.stderr)
         sys.exit(1)
+
+    # Get active window context if focus-aware mode enabled
+    active_context = None
+    if focus_aware:
+        if not WINDOW_MONITOR_ENABLED or not window_monitor_available():
+            print("WARNING: focus-aware mode requested but window monitor unavailable", file=sys.stderr)
+            print("  Install xdotool on Linux: apt install xdotool", file=sys.stderr)
+        else:
+            active_context = get_active_window_context()
+            if active_context:
+                _log_window_context(active_context)
+                print(f"Focus-aware mode: active app = {active_context.get('app_name', 'unknown')}")
+                if active_context.get('project_path'):
+                    print(f"  Active project: {active_context['project_path']}")
+            else:
+                print("WARNING: failed to detect active window context", file=sys.stderr)
 
     all_findings = []
 
@@ -295,13 +389,13 @@ def main():
     if target.is_dir():
         if (target / '.git').exists():
             # Single git repo
-            findings = watch_project(target)
+            findings = watch_project(target, active_context)
             all_findings.extend(findings)
         else:
             # Watch all subdirs with .git
             for subdir in target.iterdir():
                 if subdir.is_dir() and (subdir / '.git').exists():
-                    findings = watch_project(subdir)
+                    findings = watch_project(subdir, active_context)
                     all_findings.extend(findings)
 
     # Summary

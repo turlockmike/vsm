@@ -1,0 +1,13 @@
+{
+  "id": "watch_new_todos_20260215_082001",
+  "title": "New TODOs added in main",
+  "description": "Found 9 TODO/FIXME in recent commits:\n  +**Stale TODOs** \u2014 TODO/FIXME comments added in recent commits but not yet resol\n  +   - TODO/FIXME comments added but not resolved\n  +- Unresolved TODO/FIXME in recent changes\n  +    \"\"\"Detect TODO/FIXME in recent commits (last 24h)\"\"\"\n  +    # Search for TODO/FIXME in diff\n\nSuggested action: Review and resolve TODOs or create tracking issues\n\nProject: /home/mike/projects/vsm/main",
+  "status": "pending",
+  "priority": "low",
+  "created_at": "2026-02-15T08:20:01.717127",
+  "source": "project_watcher",
+  "metadata": {
+    "project_path": "/home/mike/projects/vsm/main",
+    "finding_type": "new_todos"
+  }
+}

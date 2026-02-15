@@ -211,6 +211,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full technical design.
    - Detects issues BEFORE you push, runs locally (zero latency, privacy-first)
    - **Example:** `python3 sandbox/tools/project_watcher.py ~/projects` scans all repos, creates actionable VSM tasks
    - **Value:** Unlike cloud linters, this sees your working directory state in real-time, catches mistakes before commit
+   - **NEW: Focus-aware mode** — Add `--focus-aware` flag to boost priority for tasks in your currently-active project (detects VS Code/IDE windows). Perfect for context switching: VSM nudges you to commit work BEFORE you switch to another project.
 
 2. **Self-maintenance** — VSM fixes its own bugs, optimizes its code, monitors competitors, and ships improvements without supervision. Real example: After 6 consecutive timeout failures, VSM autonomously designed and shipped exponential backoff + model fallback.
 

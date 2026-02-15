@@ -185,6 +185,21 @@ def send_reply(inbox_id, thread_id, to_email, subject, body):
     """Send reply via agentmail API. Uses reply endpoint if thread exists."""
     headers = get_headers()
 
+    # DEFENSIVE: Check if we already replied to this thread via API
+    try:
+        thread = get_thread_messages(inbox_id, thread_id)
+        messages = thread.get("messages", [])
+        inbox_addr = inbox_id.split("@")[0] if "@" in inbox_id else inbox_id
+
+        # Check if any message from our inbox exists (we already replied)
+        for msg in messages:
+            if inbox_addr in msg.get("from", "") or inbox_id in msg.get("from", ""):
+                print(f"[maildir] Already replied to thread {thread_id[:8]}... via API, skipping")
+                return {"status": "already_sent"}
+    except Exception as e:
+        print(f"[maildir] Warning: Could not check thread history: {e}")
+        # Continue anyway - better to risk duplicate than miss a reply
+
     # Try to reply to existing thread
     message_id = get_last_message_id(inbox_id, thread_id)
     if message_id:
@@ -244,6 +259,13 @@ def sync_outbox():
 
     for outfile in OUTBOX_DIR.glob("*.txt"):
         try:
+            # DEFENSIVE: Check if already in sent/ before sending
+            sent_file = SENT_DIR / outfile.name
+            if sent_file.exists():
+                print(f"[maildir] Skipping (already sent): {outfile.name}")
+                outfile.unlink()  # Remove duplicate from outbox
+                continue
+
             content = outfile.read_text()
             lines = content.split("\n")
 
@@ -276,15 +298,15 @@ def sync_outbox():
                 print(f"[maildir] Skipping malformed outbox file: {outfile.name}")
                 continue
 
-            # Send via API
+            # Send via API (with logging)
+            print(f"[maildir] Sending via API: {outfile.name} (thread {thread_id[:8]}...)")
             send_reply(inbox_id, thread_id, to_email, subject or "(no subject)", body)
 
             # Move to sent/
-            sent_file = SENT_DIR / outfile.name
             outfile.rename(sent_file)
 
             sent_count += 1
-            print(f"[maildir] Sent: {outfile.name}")
+            print(f"[maildir] Sent successfully: {outfile.name}")
 
         except Exception as e:
             print(f"[maildir] Error sending {outfile.name}: {e}")

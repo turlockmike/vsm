@@ -292,6 +292,25 @@ I'll update you when it's done."""
         except Exception as e:
             print(f"[email-responder-v2] Warning: could not mark thread read in API: {e}")
 
+        # DEFENSIVE: Also update synced_threads.json to prevent reprocessing
+        # even if mark_thread_read fails
+        try:
+            from pathlib import Path
+            import json
+            synced_file = Path(__file__).parent.parent / "state" / "synced_threads.json"
+            if synced_file.exists():
+                data = json.loads(synced_file.read_text())
+                synced = data.get("synced", {})
+            else:
+                synced = {}
+
+            # Mark this thread as processed (use message_id if available)
+            synced[thread_id] = email.get("message_id", "processed")
+            synced_file.write_text(json.dumps({"synced": synced}, indent=2))
+            print(f"[email-responder-v2] Updated synced tracking for thread {thread_id[:8]}...")
+        except Exception as e:
+            print(f"[email-responder-v2] Warning: could not update sync tracking: {e}")
+
         # Log it
         log_file = LOG_DIR / f"email_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         log_entry = {

@@ -14,27 +14,76 @@
             font-family: 'Courier New', monospace;
             background: #0a0a0a;
             color: #00ff00;
-            padding: 20px;
             line-height: 1.6;
         }
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
+            padding: 0 20px;
         }
-        h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
+
+        /* Header Bar */
+        .header-bar {
+            background: #111;
+            border-bottom: 2px solid #00ff00;
+            padding: 15px 0;
+            margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .header-title {
+            font-size: 1.8em;
             color: #00ff00;
             text-shadow: 0 0 10px #00ff00;
         }
-        .subtitle {
-            color: #888;
-            margin-bottom: 30px;
-            font-size: 0.9em;
+        .header-stats {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
         }
+        .header-badge {
+            background: #0a0a0a;
+            padding: 5px 12px;
+            border-radius: 4px;
+            border: 1px solid #333;
+            font-size: 0.85em;
+        }
+        .header-badge label {
+            color: #888;
+            margin-right: 5px;
+        }
+        .criticality-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+        .criticality-low { background: #00ff00; }
+        .criticality-medium { background: #ffaa00; }
+        .criticality-high { background: #ff0000; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 20px;
             margin-bottom: 20px;
         }
@@ -43,6 +92,10 @@
             border: 1px solid #333;
             border-radius: 8px;
             padding: 20px;
+            transition: border-color 0.3s;
+        }
+        .card:hover {
+            border-color: #00cc00;
         }
         .card h2 {
             color: #00cc00;
@@ -63,6 +116,12 @@
         .metric-value {
             color: #00ff00;
             font-weight: bold;
+            transition: all 0.3s;
+        }
+        .metric-value.updated {
+            background: #00ff0033;
+            padding: 2px 6px;
+            border-radius: 3px;
         }
         .status-ok {
             color: #00ff00;
@@ -73,16 +132,87 @@
         .status-error {
             color: #ff0000;
         }
+
+        /* Task Management */
         .task-list {
             list-style: none;
+            max-height: 400px;
+            overflow-y: auto;
         }
         .task-item {
             background: #0a0a0a;
-            padding: 10px;
+            padding: 12px;
             margin: 5px 0;
             border-left: 3px solid #00ff00;
             font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
         }
+        .task-item:hover {
+            background: #151515;
+            border-left-color: #00ff00;
+        }
+        .task-item.expanded {
+            background: #151515;
+        }
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .task-details {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #333;
+            display: none;
+        }
+        .task-item.expanded .task-details {
+            display: block;
+        }
+        .task-description {
+            color: #888;
+            margin: 5px 0;
+            font-size: 0.85em;
+        }
+        .task-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        .task-actions button {
+            padding: 5px 10px;
+            font-size: 0.8em;
+        }
+        .task-actions select {
+            background: #0a0a0a;
+            color: #00ff00;
+            border: 1px solid #333;
+            padding: 5px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .btn-small {
+            background: #00cc00;
+            color: #000;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+        }
+        .btn-small:hover {
+            background: #00ff00;
+        }
+        .btn-danger {
+            background: #cc0000;
+            color: #fff;
+        }
+        .btn-danger:hover {
+            background: #ff0000;
+        }
+
         .log-entry {
             background: #0a0a0a;
             padding: 8px;
@@ -101,12 +231,6 @@
             color: #ff6666;
             padding: 5px 0;
             font-size: 0.9em;
-        }
-        .refresh-info {
-            text-align: center;
-            color: #555;
-            margin-top: 20px;
-            font-size: 0.85em;
         }
         .criticality-bar {
             height: 20px;
@@ -192,13 +316,130 @@
             max-height: 60px;
             overflow: hidden;
         }
+
+        /* Command Terminal */
+        .terminal-container {
+            margin-top: 20px;
+        }
+        .terminal {
+            background: #000;
+            border: 1px solid #00ff00;
+            border-radius: 8px;
+            padding: 15px;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+        }
+        .terminal-output {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 200px;
+            margin-bottom: 10px;
+            font-size: 0.85em;
+        }
+        .terminal-line {
+            margin: 2px 0;
+            color: #00ff00;
+        }
+        .terminal-line.error {
+            color: #ff6666;
+        }
+        .terminal-line.command {
+            color: #00ccff;
+        }
+        .terminal-input-line {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .terminal-prompt {
+            color: #00ff00;
+            font-weight: bold;
+        }
+        .terminal-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 1em;
+            outline: none;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #555;
+            border-top: 1px solid #333;
+            margin-top: 30px;
+        }
+        .footer a {
+            color: #00cc00;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            color: #00ff00;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            .header-content {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .header-stats {
+                width: 100%;
+            }
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00cc00;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>VSM — Viable System Machine</h1>
-        <div class="subtitle">Autonomous AI Computer System | System 5 Intelligence</div>
+    <div class="header-bar">
+        <div class="header-content">
+            <div class="header-title">VSM</div>
+            <div class="header-stats">
+                <div class="header-badge">
+                    <span class="criticality-dot criticality-low" id="criticality-indicator"></span>
+                    <label>Criticality:</label>
+                    <span id="header-criticality">--</span>
+                </div>
+                <div class="header-badge">
+                    <label>Cycle:</label>
+                    <span id="header-cycle">--</span>
+                </div>
+                <div class="header-badge">
+                    <label>Uptime:</label>
+                    <span id="header-uptime">--</span>
+                </div>
+                <div class="header-badge">
+                    <label>Status:</label>
+                    <span id="header-status">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
 
+    <div class="container">
         <div class="grid">
             <div class="card">
                 <h2>System Status</h2>
@@ -316,12 +557,36 @@
             </div>
         </div>
 
-        <div class="refresh-info">
-            Auto-refreshing every 30 seconds | Last updated: <span id="last-update">--</span>
+        <div class="card terminal-container">
+            <h2>Command Interface</h2>
+            <div class="terminal">
+                <div class="terminal-output" id="terminal-output">
+                    <div class="terminal-line">VSM Command Interface v0.1</div>
+                    <div class="terminal-line">Available: task add &lt;title&gt;, task list, status, email &lt;subject&gt; | &lt;body&gt;</div>
+                    <div class="terminal-line">Type a command and press Enter...</div>
+                </div>
+                <div class="terminal-input-line">
+                    <span class="terminal-prompt">&gt;</span>
+                    <input type="text" class="terminal-input" id="terminal-input"
+                           placeholder="Enter command..." autocomplete="off">
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            VSM v0.1 | Autonomous AI Computer System |
+            Built on <a href="https://claude.ai/claude-code" target="_blank">Claude Code</a> |
+            <span id="connection-status">Connected</span>
         </div>
     </div>
 
     <script>
+        let eventSource = null;
+        let commandHistory = [];
+        let historyIndex = -1;
+        let previousValues = {};
+        const startTime = Date.now();
+
         function formatNumber(num) {
             return num.toLocaleString();
         }
@@ -330,39 +595,88 @@
             return new Date(ts).toLocaleString();
         }
 
-        async function updateStatus() {
+        function formatUptime(startTimestamp) {
+            const now = Date.now();
+            const diff = now - startTimestamp;
+            const hours = Math.floor(diff / 3600000);
+            const minutes = Math.floor((diff % 3600000) / 60000);
+            return `${hours}h ${minutes}m`;
+        }
+
+        function updateMetricValue(id, newValue) {
+            const el = document.getElementById(id);
+            if (el) {
+                const oldValue = el.textContent;
+                el.textContent = newValue;
+
+                if (oldValue !== newValue && oldValue !== '--') {
+                    el.classList.add('updated');
+                    setTimeout(() => el.classList.remove('updated'), 1000);
+                }
+            }
+        }
+
+        function updateCriticalityIndicator(criticality) {
+            const indicator = document.getElementById('criticality-indicator');
+            indicator.classList.remove('criticality-low', 'criticality-medium', 'criticality-high');
+
+            if (criticality < 0.3) {
+                indicator.classList.add('criticality-low');
+            } else if (criticality < 0.7) {
+                indicator.classList.add('criticality-medium');
+            } else {
+                indicator.classList.add('criticality-high');
+            }
+        }
+
+        async function updateStatus(state = null) {
             try {
-                const stateRes = await fetch('/api/state');
-                const state = await stateRes.json();
+                // If state not provided, fetch it
+                if (!state) {
+                    const stateRes = await fetch('/api/state');
+                    state = await stateRes.json();
+                }
+
+                // Update header
+                updateMetricValue('header-criticality', state.criticality.toFixed(2));
+                updateMetricValue('header-cycle', state.cycle_count);
+                updateMetricValue('header-uptime', formatUptime(startTime));
+                updateMetricValue('header-status', state.last_result_success ? 'OK' : 'ERROR');
+                updateCriticalityIndicator(state.criticality);
 
                 // System Status
-                document.getElementById('criticality').textContent = state.criticality.toFixed(2);
+                updateMetricValue('criticality', state.criticality.toFixed(2));
                 document.getElementById('criticality-bar').style.width = (state.criticality * 100) + '%';
-                document.getElementById('cycle-count').textContent = state.cycle_count;
-                document.getElementById('last-action').textContent = state.last_action.substring(0, 60) + '...';
-                document.getElementById('last-optimizer').textContent = state.last_optimizer;
+                updateMetricValue('cycle-count', state.cycle_count);
+
+                const lastAction = state.last_action.substring(0, 60) + '...';
+                updateMetricValue('last-action', lastAction);
+                updateMetricValue('last-optimizer', state.last_optimizer);
 
                 const resultEl = document.getElementById('last-result');
-                resultEl.textContent = state.last_result_success ? 'SUCCESS' : 'FAILED';
-                resultEl.className = 'metric-value ' + (state.last_result_success ? 'status-ok' : 'status-error');
+                const resultText = state.last_result_success ? 'SUCCESS' : 'FAILED';
+                if (resultEl.textContent !== resultText) {
+                    resultEl.textContent = resultText;
+                    resultEl.className = 'metric-value ' + (state.last_result_success ? 'status-ok' : 'status-error');
+                }
 
                 // Health Metrics
-                document.getElementById('pending-tasks').textContent = state.health.pending_tasks;
-                document.getElementById('disk-free').textContent = state.health.disk_free_gb.toFixed(1) + ' GB';
-                document.getElementById('mem-available').textContent = state.health.mem_available_mb + ' MB';
-                document.getElementById('cron-status').textContent = state.health.cron_installed ? 'ACTIVE' : 'INACTIVE';
-                document.getElementById('log-size').textContent = state.health.log_size_mb.toFixed(2) + ' MB';
+                updateMetricValue('pending-tasks', state.health.pending_tasks);
+                updateMetricValue('disk-free', state.health.disk_free_gb.toFixed(1) + ' GB');
+                updateMetricValue('mem-available', state.health.mem_available_mb + ' MB');
+                updateMetricValue('cron-status', state.health.cron_installed ? 'ACTIVE' : 'INACTIVE');
+                updateMetricValue('log-size', state.health.log_size_mb.toFixed(2) + ' MB');
 
                 // Token Usage & Cost
                 const todayCost = state.token_budget.today_cost_usd || 0;
                 const totalCost = state.token_usage.total_cost_usd || 0;
                 const lastCycleCost = state.token_usage.last_cycle_cost_usd || 0;
-                document.getElementById('today-cost').textContent = '$' + todayCost.toFixed(4);
-                document.getElementById('total-cost').textContent = '$' + totalCost.toFixed(4);
-                document.getElementById('token-input').textContent = formatNumber(state.token_budget.today_input);
-                document.getElementById('token-output').textContent = formatNumber(state.token_budget.today_output);
-                document.getElementById('last-cycle-cost').textContent = '$' + lastCycleCost.toFixed(4);
-                document.getElementById('cycles-tracked').textContent = state.token_usage.cycles_tracked || 0;
+                updateMetricValue('today-cost', '$' + todayCost.toFixed(4));
+                updateMetricValue('total-cost', '$' + totalCost.toFixed(4));
+                updateMetricValue('token-input', formatNumber(state.token_budget.today_input));
+                updateMetricValue('token-output', formatNumber(state.token_budget.today_output));
+                updateMetricValue('last-cycle-cost', '$' + lastCycleCost.toFixed(4));
+                updateMetricValue('cycles-tracked', state.token_usage.cycles_tracked || 0);
 
                 // Recent Errors
                 const errorList = document.getElementById('error-list');
@@ -374,24 +688,58 @@
                     errorList.innerHTML = '<li style="color: #00ff00;">No errors</li>';
                 }
 
-                // Tasks
+                // Fetch and update tasks
+                await updateTasks();
+
+                // Fetch and update logs
+                await updateLogs();
+
+            } catch (error) {
+                console.error('Failed to update status:', error);
+            }
+        }
+
+        async function updateTasks() {
+            try {
                 const tasksRes = await fetch('/api/tasks');
                 const tasksData = await tasksRes.json();
                 const tasks = tasksData.tasks || [];
                 const taskList = document.getElementById('task-list');
+
                 if (tasks.length > 0) {
-                    taskList.innerHTML = tasks.map(task =>
-                        `<li class="task-item">#${task.id} [P${task.priority}] ${task.title}</li>`
-                    ).join('');
+                    taskList.innerHTML = tasks.map(task => `
+                        <li class="task-item" id="task-${task.id}" onclick="toggleTask('${task.id}')">
+                            <div class="task-header">
+                                <span>#${task.id} [P${task.priority}] ${task.title}</span>
+                            </div>
+                            <div class="task-details">
+                                <div class="task-description">${task.description || 'No description'}</div>
+                                <div class="task-actions">
+                                    <select onchange="updateTaskPriority('${task.id}', this.value)" onclick="event.stopPropagation()">
+                                        ${[1,2,3,4,5,6,7,8,9,10].map(p =>
+                                            `<option value="${p}" ${p == task.priority ? 'selected' : ''}>P${p}</option>`
+                                        ).join('')}
+                                    </select>
+                                    <button class="btn-small btn-danger" onclick="deleteTask('${task.id}', event)">Delete</button>
+                                </div>
+                            </div>
+                        </li>
+                    `).join('');
                 } else {
                     taskList.innerHTML = '<li>No pending tasks</li>';
                 }
+            } catch (error) {
+                console.error('Failed to update tasks:', error);
+            }
+        }
 
-                // Logs
+        async function updateLogs() {
+            try {
                 const logsRes = await fetch('/api/logs');
                 const logsData = await logsRes.json();
                 const logs = logsData.logs || [];
                 const logsContent = document.getElementById('logs-content');
+
                 if (logs.length > 0) {
                     logsContent.innerHTML = logs.map(log => {
                         const success = log.success;
@@ -416,11 +764,59 @@
                 } else {
                     logsContent.innerHTML = '<div>No logs available</div>';
                 }
-
-                document.getElementById('last-update').textContent = new Date().toLocaleString();
-
             } catch (error) {
-                console.error('Failed to update status:', error);
+                console.error('Failed to update logs:', error);
+            }
+        }
+
+        function toggleTask(taskId) {
+            const taskEl = document.getElementById('task-' + taskId);
+            if (taskEl) {
+                taskEl.classList.toggle('expanded');
+            }
+        }
+
+        async function updateTaskPriority(taskId, newPriority) {
+            try {
+                const response = await fetch(`/api/tasks/${taskId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ priority: parseInt(newPriority) })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    addTerminalLine(`Task #${taskId} priority updated to ${newPriority}`, 'ok');
+                    await updateTasks();
+                } else {
+                    addTerminalLine(`Error updating task: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                addTerminalLine(`Error updating task: ${error.message}`, 'error');
+            }
+        }
+
+        async function deleteTask(taskId, event) {
+            event.stopPropagation();
+
+            if (!confirm(`Delete task #${taskId}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/tasks/${taskId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    addTerminalLine(`Task #${taskId} deleted`, 'ok');
+                    await updateTasks();
+                } else {
+                    addTerminalLine(`Error deleting task: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                addTerminalLine(`Error deleting task: ${error.message}`, 'error');
             }
         }
 
@@ -434,9 +830,7 @@
             try {
                 const response = await fetch('/api/tasks', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, description, priority })
                 });
 
@@ -448,19 +842,146 @@
                     document.getElementById('task-description').value = '';
                     document.getElementById('task-priority').value = '5';
 
-                    // Refresh status
-                    updateStatus();
+                    addTerminalLine(`Task #${result.task.id} created: ${title}`, 'ok');
+
+                    // Refresh tasks
+                    await updateTasks();
                 } else {
-                    alert('Error adding task: ' + result.error);
+                    addTerminalLine(`Error adding task: ${result.error}`, 'error');
                 }
             } catch (error) {
-                alert('Error adding task: ' + error.message);
+                addTerminalLine(`Error adding task: ${error.message}`, 'error');
             }
         }
 
-        // Update immediately and then every 30 seconds
+        function addTerminalLine(text, type = 'normal') {
+            const output = document.getElementById('terminal-output');
+            const line = document.createElement('div');
+            line.className = 'terminal-line' + (type === 'error' ? ' error' : type === 'command' ? ' command' : '');
+            line.textContent = text;
+            output.appendChild(line);
+            output.scrollTop = output.scrollHeight;
+
+            // Keep only last 50 lines
+            while (output.children.length > 50) {
+                output.removeChild(output.firstChild);
+            }
+        }
+
+        async function executeCommand(command) {
+            if (!command.trim()) return;
+
+            // Add to history
+            commandHistory.unshift(command);
+            if (commandHistory.length > 10) {
+                commandHistory.pop();
+            }
+            historyIndex = -1;
+
+            // Display command
+            addTerminalLine(`> ${command}`, 'command');
+
+            // Handle 'status' locally for instant feedback
+            if (command === 'status') {
+                await updateStatus();
+                addTerminalLine('Status refreshed', 'ok');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    result.output.split('\n').forEach(line => {
+                        addTerminalLine(line, 'ok');
+                    });
+
+                    // Refresh UI if needed
+                    if (command.startsWith('task')) {
+                        await updateTasks();
+                    }
+                } else {
+                    addTerminalLine(result.output, 'error');
+                }
+            } catch (error) {
+                addTerminalLine(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Terminal input handling
+        document.getElementById('terminal-input').addEventListener('keydown', async function(e) {
+            if (e.key === 'Enter') {
+                const command = this.value;
+                this.value = '';
+                await executeCommand(command);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    this.value = commandHistory[historyIndex];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    this.value = commandHistory[historyIndex];
+                } else if (historyIndex === 0) {
+                    historyIndex = -1;
+                    this.value = '';
+                }
+            }
+        });
+
+        // Server-Sent Events for live updates
+        function connectSSE() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource('/api/events');
+
+            eventSource.addEventListener('state', function(e) {
+                try {
+                    const state = JSON.parse(e.data);
+                    updateStatus(state);
+                    document.getElementById('connection-status').textContent = 'Connected (Live)';
+                    document.getElementById('connection-status').style.color = '#00ff00';
+                } catch (error) {
+                    console.error('Error parsing SSE data:', error);
+                }
+            });
+
+            eventSource.onerror = function(e) {
+                console.error('SSE connection error:', e);
+                document.getElementById('connection-status').textContent = 'Reconnecting...';
+                document.getElementById('connection-status').style.color = '#ffaa00';
+
+                // Reconnect after 5 seconds
+                setTimeout(() => {
+                    connectSSE();
+                }, 5000);
+            };
+
+            eventSource.onopen = function() {
+                document.getElementById('connection-status').textContent = 'Connected (Live)';
+                document.getElementById('connection-status').style.color = '#00ff00';
+            };
+        }
+
+        // Initialize
         updateStatus();
-        setInterval(updateStatus, 30000);
+        connectSSE();
+
+        // Update uptime every minute
+        setInterval(() => {
+            document.getElementById('header-uptime').textContent = formatUptime(startTime);
+        }, 60000);
     </script>
 </body>
 </html>

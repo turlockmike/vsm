@@ -7,15 +7,22 @@ Serves static files and provides API endpoints for VSM status
 import json
 import os
 import glob
+import time
+import threading
 from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
+from urllib.parse import parse_qs
 
 # VSM root directory
 VSM_ROOT = Path(__file__).parent.parent
 STATE_FILE = VSM_ROOT / "state" / "state.json"
 TASKS_DIR = VSM_ROOT / "sandbox" / "tasks"
 LOGS_DIR = VSM_ROOT / "state" / "logs"
+OUTBOX_DIR = VSM_ROOT / "sandbox" / "outbox"
+
+# Track state file modification time for SSE
+last_state_mtime = 0
 
 
 class VSMHandler(SimpleHTTPRequestHandler):
@@ -35,6 +42,8 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.serve_tasks()
         elif self.path.startswith('/api/logs'):
             self.serve_logs()
+        elif self.path == '/api/events':
+            self.serve_events()
         else:
             # Serve static files
             super().do_GET()
@@ -43,6 +52,22 @@ class VSMHandler(SimpleHTTPRequestHandler):
         """Handle POST requests"""
         if self.path == '/api/tasks':
             self.create_task()
+        elif self.path == '/api/command':
+            self.handle_command()
+        else:
+            self.send_error(404, "Not Found")
+
+    def do_PUT(self):
+        """Handle PUT requests"""
+        if self.path.startswith('/api/tasks/'):
+            self.update_task()
+        else:
+            self.send_error(404, "Not Found")
+
+    def do_DELETE(self):
+        """Handle DELETE requests"""
+        if self.path.startswith('/api/tasks/'):
+            self.delete_task()
         else:
             self.send_error(404, "Not Found")
 
@@ -72,9 +97,11 @@ class VSMHandler(SimpleHTTPRequestHandler):
                             tasks.append({
                                 'id': task_data.get('id', task_file.stem),
                                 'title': task_data.get('title', 'No title'),
+                                'description': task_data.get('description', ''),
                                 'priority': task_data.get('priority', 0),
                                 'status': task_data.get('status', 'pending'),
-                                'created': task_data.get('created', '')
+                                'created': task_data.get('created', ''),
+                                'filename': task_file.name
                             })
                     except Exception as e:
                         print(f"Error reading task {task_file}: {e}")
@@ -120,6 +147,46 @@ class VSMHandler(SimpleHTTPRequestHandler):
         except Exception as e:
             self.send_error(500, f"Error reading logs: {e}")
 
+    def serve_events(self):
+        """Serve Server-Sent Events for state updates"""
+        global last_state_mtime
+
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/event-stream')
+        self.send_header('Cache-Control', 'no-cache')
+        self.send_header('Connection', 'keep-alive')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+
+        try:
+            # Send initial state
+            if STATE_FILE.exists():
+                with open(STATE_FILE, 'r') as f:
+                    state_data = f.read()
+                self.wfile.write(f"event: state\ndata: {state_data}\n\n".encode())
+                self.wfile.flush()
+                last_state_mtime = os.path.getmtime(STATE_FILE)
+
+            # Keep connection alive and send updates
+            while True:
+                time.sleep(2)  # Check every 2 seconds
+
+                if STATE_FILE.exists():
+                    current_mtime = os.path.getmtime(STATE_FILE)
+                    if current_mtime > last_state_mtime:
+                        with open(STATE_FILE, 'r') as f:
+                            state_data = f.read()
+                        self.wfile.write(f"event: state\ndata: {state_data}\n\n".encode())
+                        self.wfile.flush()
+                        last_state_mtime = current_mtime
+                else:
+                    # Send heartbeat to keep connection alive
+                    self.wfile.write(": heartbeat\n\n".encode())
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            # Client disconnected
+            pass
+
     def create_task(self):
         """Create a new task from POST request"""
         try:
@@ -163,6 +230,190 @@ class VSMHandler(SimpleHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+
+    def update_task(self):
+        """Update an existing task"""
+        try:
+            # Extract task ID from path
+            task_id = self.path.split('/')[-1]
+
+            content_length = int(self.headers['Content-Length'])
+            body = self.rfile.read(content_length)
+            data = json.loads(body)
+
+            # Find the task file
+            task_file = None
+            if TASKS_DIR.exists():
+                for tf in TASKS_DIR.glob(f"{task_id}_*.json"):
+                    task_file = tf
+                    break
+
+            if not task_file or not task_file.exists():
+                self.send_response(404)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': 'Task not found'}).encode())
+                return
+
+            # Read existing task
+            with open(task_file, 'r') as f:
+                task = json.load(f)
+
+            # Update fields
+            if 'title' in data:
+                task['title'] = data['title']
+            if 'description' in data:
+                task['description'] = data['description']
+            if 'priority' in data:
+                task['priority'] = data['priority']
+            if 'status' in data:
+                task['status'] = data['status']
+
+            # Write updated task
+            with open(task_file, 'w') as f:
+                json.dump(task, f, indent=2)
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': True, 'task': task}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+
+    def delete_task(self):
+        """Delete a task"""
+        try:
+            # Extract task ID from path
+            task_id = self.path.split('/')[-1]
+
+            # Find and delete the task file
+            deleted = False
+            if TASKS_DIR.exists():
+                for task_file in TASKS_DIR.glob(f"{task_id}_*.json"):
+                    task_file.unlink()
+                    deleted = True
+                    break
+
+            if deleted:
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': True}).encode())
+            else:
+                self.send_response(404)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': 'Task not found'}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+
+    def handle_command(self):
+        """Handle command interface requests"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            body = self.rfile.read(content_length)
+            data = json.loads(body)
+
+            command = data.get('command', '').strip()
+            output = ""
+            success = True
+
+            if command.startswith('task add '):
+                # Extract title from command
+                title = command[9:].strip()
+                if title:
+                    task_id = self.get_next_task_id()
+                    task = {
+                        "id": task_id,
+                        "priority": 5,
+                        "title": title,
+                        "description": title,
+                        "created": datetime.now().isoformat(timespec='seconds'),
+                        "status": "pending"
+                    }
+                    filename_base = title.lower()[:30].replace(' ', '_')
+                    filename_base = ''.join(c for c in filename_base if c.isalnum() or c == '_')
+                    filename = TASKS_DIR / f"{task_id}_{filename_base}.json"
+                    TASKS_DIR.mkdir(parents=True, exist_ok=True)
+                    with open(filename, 'w') as f:
+                        json.dump(task, f, indent=2)
+                    output = f"Task #{task_id} created: {title}"
+                else:
+                    output = "Error: task title required"
+                    success = False
+
+            elif command == 'task list':
+                tasks = []
+                if TASKS_DIR.exists():
+                    for task_file in sorted(TASKS_DIR.glob("*.json")):
+                        try:
+                            with open(task_file, 'r') as f:
+                                task_data = json.load(f)
+                                tasks.append(f"#{task_data.get('id', '?')} [P{task_data.get('priority', '?')}] {task_data.get('title', 'No title')}")
+                        except:
+                            pass
+                if tasks:
+                    output = '\n'.join(tasks)
+                else:
+                    output = "No pending tasks"
+
+            elif command == 'status':
+                output = "Status refreshed"
+
+            elif command.startswith('email '):
+                # Parse email command: email <subject> | <body>
+                parts = command[6:].split('|', 1)
+                if len(parts) == 2:
+                    subject = parts[0].strip()
+                    body = parts[1].strip()
+
+                    # Create outbox directory if needed
+                    OUTBOX_DIR.mkdir(parents=True, exist_ok=True)
+
+                    # Write email file
+                    email_data = {
+                        "to": "owner",
+                        "subject": subject,
+                        "body": body,
+                        "created": datetime.now().isoformat(timespec='seconds')
+                    }
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    email_file = OUTBOX_DIR / f"{timestamp}_email.json"
+                    with open(email_file, 'w') as f:
+                        json.dump(email_data, f, indent=2)
+
+                    output = f"Email queued: {subject}"
+                else:
+                    output = "Error: email format is 'email <subject> | <body>'"
+                    success = False
+
+            else:
+                output = f"Unknown command: {command}\nAvailable: task add <title>, task list, status, email <subject> | <body>"
+                success = False
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': success, 'output': output}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': False, 'output': f"Error: {str(e)}"}).encode())
 
     def get_next_task_id(self):
         """Find the next available task ID"""

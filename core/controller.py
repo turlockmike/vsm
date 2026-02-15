@@ -158,7 +158,7 @@ def run_claude(prompt, model="sonnet"):
             cmd,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=300,
             cwd=str(VSM_ROOT),
             env=env,
         )
@@ -173,11 +173,34 @@ def run_claude(prompt, model="sonnet"):
         return {"success": False, "output": "", "error": str(e)}
 
 
+def process_inbox():
+    """Run inbox processor to convert owner emails into tasks."""
+    try:
+        result = subprocess.run(
+            ["python3", str(VSM_ROOT / "sandbox" / "tools" / "process_inbox.py")],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=str(VSM_ROOT),
+        )
+        if result.returncode == 0:
+            return json.loads(result.stdout)
+        return {"error": result.stderr}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def main():
     # === Gather sensory input ===
     state = load_state()
     health = check_health()
     state["health"] = health
+
+    # Process inbox before gathering tasks (new emails → tasks)
+    inbox_result = process_inbox()
+    if inbox_result.get("created_tasks"):
+        print(f"[VSM] Inbox: {len(inbox_result['created_tasks'])} new tasks from owner")
+
     tasks = gather_tasks()
     recent_logs = gather_recent_logs(n=3)
 

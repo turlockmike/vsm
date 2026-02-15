@@ -297,6 +297,22 @@ def run_heartbeat(args):
         print(f"\n{Colors.RED}Error running heartbeat: {e}{Colors.RESET}")
         sys.exit(1)
 
+def run_dashboard(args):
+    """Start the web dashboard"""
+    dashboard_script = VSM_ROOT / 'core' / 'dashboard.py'
+
+    if not dashboard_script.exists():
+        print(f"{Colors.RED}Error: Dashboard script not found at {dashboard_script}{Colors.RESET}")
+        sys.exit(1)
+
+    try:
+        subprocess.run(['python3', str(dashboard_script)], cwd=str(VSM_ROOT))
+    except KeyboardInterrupt:
+        print(f"\n{Colors.YELLOW}Dashboard stopped{Colors.RESET}")
+    except Exception as e:
+        print(f"\n{Colors.RED}Error running dashboard: {e}{Colors.RESET}")
+        sys.exit(1)
+
 def main():
     parser = argparse.ArgumentParser(
         description='VSM — Viable System Machine CLI',
@@ -332,6 +348,10 @@ def main():
     # run
     run_parser = subparsers.add_parser('run', help='Manually trigger a heartbeat cycle')
     run_parser.set_defaults(func=run_heartbeat)
+
+    # dashboard
+    dashboard_parser = subparsers.add_parser('dashboard', help='Start the web dashboard')
+    dashboard_parser.set_defaults(func=run_dashboard)
 
     args = parser.parse_args()
 

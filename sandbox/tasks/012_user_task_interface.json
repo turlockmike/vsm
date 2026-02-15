@@ -1,8 +1,0 @@
-{
-  "id": "012",
-  "priority": 3,
-  "title": "Build a simple CLI for users to interact with the VSM",
-  "description": "Users need a way to give the system tasks without editing JSON files. Create a 'vsm' CLI wrapper: 'vsm task add \"Build me a web scraper\"', 'vsm status', 'vsm logs', 'vsm task list'. This makes the system feel like a real product, not a collection of scripts.",
-  "created": "2026-02-14T16:40:00",
-  "status": "pending"
-}

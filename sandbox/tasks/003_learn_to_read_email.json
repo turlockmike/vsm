@@ -1,8 +1,0 @@
-{
-  "id": "003",
-  "priority": 3,
-  "title": "Implement inbound email reading",
-  "description": "The system can send emails but cannot receive them yet. Use the agentmail.to API to check the inbox for replies from the owner. This creates a two-way communication channel that doesn't require a Claude Code interactive session. Build sandbox/tools/check_inbox.py.",
-  "created": "2026-02-14T16:08:00",
-  "status": "pending"
-}

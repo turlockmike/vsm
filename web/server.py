@@ -187,7 +187,7 @@ class VSMHandler(SimpleHTTPRequestHandler):
         print(f"[VSM Dashboard] {self.address_string()} - {format % args}")
 
 
-def run_server(port=80):
+def run_server(port=8090):
     """Run the VSM dashboard server"""
     server_address = ('', port)
     httpd = HTTPServer(server_address, VSMHandler)

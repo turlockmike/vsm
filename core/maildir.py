@@ -151,6 +151,14 @@ def sync_inbox():
         if synced.get(thread_id) == last_msg_id:
             continue
 
+        # CRITICAL: Skip if inbox already contains this thread (prevents race condition)
+        existing_files = list(INBOX_DIR.glob(f"{thread_id}_*.txt"))
+        if existing_files:
+            print(f"[maildir] Thread {thread_id[:8]}... already in inbox, skipping")
+            # Update synced state to prevent repeated API checks
+            synced[thread_id] = last_msg_id
+            continue
+
         sender = last_msg.get("from", "unknown@example.com")
         subject = thread.get("subject", "(no subject)")
         timestamp = last_msg.get("timestamp", datetime.now().isoformat())

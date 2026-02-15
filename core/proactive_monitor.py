@@ -151,7 +151,7 @@ def search_github_trending():
                     query,
                     "--sort", "updated",
                     "--limit", "5",
-                    "--json", "nameWithOwner,description,url,stargazersCount,updatedAt"
+                    "--json", "fullName,description,url,stargazersCount,updatedAt"
                 ],
                 capture_output=True,
                 text=True,
@@ -164,13 +164,13 @@ def search_github_trending():
             repos = json.loads(result.stdout)
 
             for repo in repos:
-                repo_id = f"gh_{repo['nameWithOwner']}"
+                repo_id = f"gh_{repo['fullName']}"
 
                 # Check if we've seen this recently
                 if repo_id not in seen["github_repos"]:
                     # Check if it's interesting (stars, keywords)
                     desc = (repo.get("description") or "").lower()
-                    name = repo["nameWithOwner"].lower()
+                    name = repo["fullName"].lower()
 
                     if (repo["stargazersCount"] > 100 or
                         any(comp.lower() in (desc + name) for comp in COMPETITORS) or
@@ -178,7 +178,7 @@ def search_github_trending():
 
                         findings.append({
                             "source": "GitHub",
-                            "title": f"{repo['nameWithOwner']} ({repo['stargazersCount']} stars)",
+                            "title": f"{repo['fullName']} ({repo['stargazersCount']} stars)",
                             "description": repo.get("description", "No description"),
                             "url": repo["url"],
                             "id": repo_id,

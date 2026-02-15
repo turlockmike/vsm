@@ -182,10 +182,15 @@ def check_todos(project_path):
 
     commits = stdout.strip().split('\n')
 
-    # Search for TODO/FIXME in diff
+    # Search for TODO/FIXME in diff (exclude meta-references about the watcher itself)
+    exclude_patterns = ['project_watcher.py', 'watch-project.md', 'TODO/FIXME comments', 'Detect TODO']
     for commit in commits[:5]:  # Check up to 5 recent commits
         stdout, _, _ = run_cmd(f"git show {commit}", cwd=project_path)
-        added_lines = [l for l in stdout.split('\n') if l.startswith('+') and ('TODO' in l or 'FIXME' in l)]
+        added_lines = [
+            l for l in stdout.split('\n')
+            if l.startswith('+') and ('TODO' in l or 'FIXME' in l)
+            and not any(pat in l for pat in exclude_patterns)
+        ]
 
         if added_lines:
             return {

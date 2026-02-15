@@ -52,19 +52,29 @@ def get_logs_last_hour():
             mtime = datetime.fromtimestamp(logfile.stat().st_mtime)
             if mtime >= one_hour_ago:
                 content = logfile.read_text()
-                recent_logs.append({
-                    "file": logfile.name,
-                    "time": mtime.strftime("%H:%M:%S"),
-                    "content": content[:500]  # First 500 chars
-                })
+                # Try to parse JSON log
+                try:
+                    log_data = json.loads(content)
+                    recent_logs.append({
+                        "file": logfile.name,
+                        "time": mtime.strftime("%H:%M:%S"),
+                        "data": log_data
+                    })
+                except json.JSONDecodeError:
+                    # Fall back to raw content if not JSON
+                    recent_logs.append({
+                        "file": logfile.name,
+                        "time": mtime.strftime("%H:%M:%S"),
+                        "data": {"summary": content[:200]}
+                    })
         except Exception:
             continue
 
     return recent_logs
 
 
-def get_pending_tasks():
-    """Get list of pending tasks."""
+def get_all_tasks():
+    """Get all tasks (pending, completed, blocked)."""
     if not TASKS_DIR.exists():
         return []
 
@@ -73,10 +83,11 @@ def get_pending_tasks():
         try:
             task = json.loads(taskfile.read_text())
             tasks.append({
-                "id": taskfile.stem,
+                "id": task.get("id", taskfile.stem),
                 "title": task.get("title", "No title"),
                 "status": task.get("status", "pending"),
-                "criticality": task.get("criticality", 0.0)
+                "priority": task.get("priority", 0),
+                "result": task.get("result", "")
             })
         except Exception:
             continue
@@ -84,7 +95,44 @@ def get_pending_tasks():
     return tasks
 
 
-def format_report(state, logs, tasks):
+def get_completed_tasks_last_hour():
+    """Get tasks completed in the last hour."""
+    if not TASKS_DIR.exists():
+        return []
+
+    one_hour_ago = datetime.now() - timedelta(hours=1)
+    completed = []
+
+    for taskfile in sorted(TASKS_DIR.glob("*.json")):
+        try:
+            task = json.loads(taskfile.read_text())
+            if task.get("status") == "completed":
+                completed_at = task.get("completed_at", "")
+                if completed_at:
+                    try:
+                        completed_time = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
+                        if completed_time.replace(tzinfo=None) >= one_hour_ago:
+                            completed.append({
+                                "id": task.get("id", taskfile.stem),
+                                "title": task.get("title", "No title"),
+                                "result": task.get("result", "")
+                            })
+                    except Exception:
+                        # If we can't parse the time, include it anyway if file was recently modified
+                        mtime = datetime.fromtimestamp(taskfile.stat().st_mtime)
+                        if mtime >= one_hour_ago:
+                            completed.append({
+                                "id": task.get("id", taskfile.stem),
+                                "title": task.get("title", "No title"),
+                                "result": task.get("result", "")
+                            })
+        except Exception:
+            continue
+
+    return completed
+
+
+def format_report(state, logs, all_tasks, completed_tasks):
     """Format the hourly report as plain text."""
     now = datetime.now()
 
@@ -104,6 +152,10 @@ def format_report(state, logs, tasks):
         token_budget = state.get("token_budget", {})
         errors = state.get("errors", [])
 
+        # Calculate daily cumulative tokens
+        today_input = token_budget.get('today_input', 0)
+        today_output = token_budget.get('today_output', 0)
+
         status_lines.extend([
             f"Status: {'UP' if state.get('last_result_success', False) else 'DOWN'}",
             f"Cycle count: {state.get('cycle_count', 0)}",
@@ -116,15 +168,11 @@ def format_report(state, logs, tasks):
             f"  Memory available: {health.get('mem_available_mb', 0)} MB",
             f"  Log size: {health.get('log_size_mb', 0):.2f} MB",
             "",
-            "Token usage (this hour):",
-            f"  Input: {token_usage.get('last_cycle_input', 0):,}",
-            f"  Output: {token_usage.get('last_cycle_output', 0):,}",
-            f"  Cycles tracked: {token_usage.get('cycles_tracked', 0)}",
-            "",
-            "Token budget (today):",
+            "Token usage (cumulative today):",
+            f"  Input: {today_input:,} tokens",
+            f"  Output: {today_output:,} tokens",
+            f"  Total: {today_input + today_output:,} tokens",
             f"  Daily soft cap: {token_budget.get('daily_soft_cap', 0):,}",
-            f"  Today input: {token_budget.get('today_input', 0):,}",
-            f"  Today output: {token_budget.get('today_output', 0):,}",
         ])
 
         if errors:
@@ -135,6 +183,17 @@ def format_report(state, logs, tasks):
     else:
         status_lines.append("No state data available")
 
+    # What I shipped
+    if completed_tasks:
+        status_lines.extend([
+            "",
+            "WHAT I SHIPPED",
+            "-" * 60,
+        ])
+        for task in completed_tasks:
+            result_preview = task['result'][:120] if task['result'] else "Completed"
+            status_lines.append(f"  [{task['id']}] {task['title']}: {result_preview}")
+
     # Activity this hour
     status_lines.extend([
         "",
@@ -143,11 +202,26 @@ def format_report(state, logs, tasks):
     ])
 
     if logs:
-        status_lines.append(f"Log files updated: {len(logs)}")
         for log in logs[-5:]:  # Last 5 logs
-            status_lines.append(f"  [{log['time']}] {log['file']}")
-            preview = log['content'].split('\n')[0][:80]
-            status_lines.append(f"    {preview}...")
+            log_data = log['data']
+            summary = log_data.get('summary', '')
+            success = log_data.get('success', None)
+            reason = log_data.get('reason', '')
+
+            status_marker = ""
+            if success is True:
+                status_marker = "[OK] "
+            elif success is False:
+                status_marker = "[FAIL] "
+
+            # Show summary if available, otherwise show reason
+            display_text = summary if summary else reason
+            if display_text:
+                # Truncate to 100 chars for readability
+                display_text = display_text[:100]
+                status_lines.append(f"  [{log['time']}] {status_marker}{display_text}")
+            else:
+                status_lines.append(f"  [{log['time']}] {log['file']}")
     else:
         status_lines.append("No activity logged this hour")
 
@@ -158,12 +232,23 @@ def format_report(state, logs, tasks):
         "-" * 60,
     ])
 
-    if tasks:
-        for task in tasks:
+    pending_tasks = [t for t in all_tasks if t['status'] == 'pending']
+    blocked_tasks = [t for t in all_tasks if t['status'] == 'blocked']
+
+    if pending_tasks:
+        for task in pending_tasks:
             status = task['status']
-            crit = task['criticality']
-            status_lines.append(f"  [{task['id']}] {task['title']} (status: {status}, crit: {crit:.2f})")
-    else:
+            priority = task['priority']
+            status_lines.append(f"  [{task['id']}] {task['title']} (priority: {priority}, status: {status})")
+
+    if blocked_tasks:
+        status_lines.append("")
+        status_lines.append("Blocked tasks:")
+        for task in blocked_tasks:
+            priority = task['priority']
+            status_lines.append(f"  [{task['id']}] {task['title']} (priority: {priority}, status: blocked)")
+
+    if not pending_tasks and not blocked_tasks:
         status_lines.append("No pending tasks")
 
     status_lines.extend([
@@ -209,9 +294,10 @@ def main():
 
     state = load_state()
     logs = get_logs_last_hour()
-    tasks = get_pending_tasks()
+    all_tasks = get_all_tasks()
+    completed_tasks = get_completed_tasks_last_hour()
 
-    report = format_report(state, logs, tasks)
+    report = format_report(state, logs, all_tasks, completed_tasks)
 
     success = send_report(report)
 

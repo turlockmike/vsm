@@ -279,7 +279,66 @@ def parse_token_usage(output_text):
     }
 
 
-def run_claude(prompt, model="opus"):
+def _recent_failure_count(state):
+    """Count consecutive recent failures (within last hour)."""
+    cutoff = datetime.now().timestamp() - 3600
+    count = 0
+    for err in reversed(state.get("errors", [])):
+        try:
+            err_time = datetime.fromisoformat(err["time"]).timestamp()
+            if err_time < cutoff:
+                break
+            count += 1
+        except Exception:
+            continue
+    return count
+
+
+def _should_backoff(state):
+    """Return True if we should skip this cycle due to consecutive failures.
+
+    Backoff schedule: after N consecutive failures within the last hour,
+    require at least N*5 minutes since the last failure before retrying.
+    This prevents hammering the API during outages or rate limits.
+    """
+    failures = _recent_failure_count(state)
+    if failures < 2:
+        return False
+
+    # Calculate required cooldown: failures * 5 minutes
+    cooldown_seconds = failures * 5 * 60
+    errors = state.get("errors", [])
+    if not errors:
+        return False
+
+    try:
+        last_failure = datetime.fromisoformat(errors[-1]["time"])
+        elapsed = (datetime.now() - last_failure).total_seconds()
+        if elapsed < cooldown_seconds:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _expire_old_errors(state):
+    """Remove errors older than 1 hour. Prevents stale errors from inflating counts."""
+    cutoff = datetime.now().timestamp() - 3600
+    state["errors"] = [
+        e for e in state.get("errors", [])
+        if _safe_timestamp(e) >= cutoff
+    ]
+
+
+def _safe_timestamp(err):
+    """Parse error timestamp safely, returning 0 on failure."""
+    try:
+        return datetime.fromisoformat(err["time"]).timestamp()
+    except Exception:
+        return 0
+
+
+def run_claude(prompt, model="opus", timeout=300):
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
 
@@ -305,7 +364,7 @@ def run_claude(prompt, model="opus"):
             cmd,
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=timeout,
             cwd=str(VSM_ROOT),
             env=env,
         )
@@ -321,7 +380,7 @@ def run_claude(prompt, model="opus"):
             "token_usage": token_usage,
         }
     except subprocess.TimeoutExpired:
-        return {"success": False, "output": "", "error": "Timeout (300s)", "model": model}
+        return {"success": False, "output": "", "error": f"Timeout ({timeout}s)", "model": model}
     except Exception as e:
         return {"success": False, "output": "", "error": str(e), "model": model}
 
@@ -410,6 +469,18 @@ def send_weekly_report():
 def main():
     # === Gather sensory input ===
     state = load_state()
+
+    # Expire old errors (>1 hour) to prevent stale accumulation
+    _expire_old_errors(state)
+
+    # Backoff check — skip cycle if too many recent failures
+    if _should_backoff(state):
+        failures = _recent_failure_count(state)
+        cooldown_min = failures * 5
+        print(f"[VSM] Backoff: {failures} recent failures, cooling down ({cooldown_min}m window)")
+        save_state(state)
+        return
+
     health = check_health()
     state["health"] = health
 
@@ -434,11 +505,20 @@ def main():
     tasks = gather_tasks()
     recent_logs = gather_recent_logs(n=3)
 
+    # Model selection: downgrade to sonnet after 3+ consecutive failures
+    failures = _recent_failure_count(state)
+    model = "sonnet" if failures >= 3 else "opus"
+    # Increase timeout for retry attempts (up to 600s max)
+    timeout = min(300 + (failures * 60), 600)
+
+    if failures > 0:
+        print(f"[VSM] Recovery mode: {failures} recent failures, using model={model}, timeout={timeout}s")
+
     print(f"[VSM] Cycle {state['cycle_count']} | Gathering state... invoking System 5")
 
     # === Deliver everything to System 5 (Claude) ===
     prompt = build_prompt(state, health, tasks, recent_logs, inbox_messages)
-    result = run_claude(prompt)
+    result = run_claude(prompt, model=model, timeout=timeout)
 
     # Track token usage
     if result.get("token_usage"):
@@ -514,6 +594,8 @@ def main():
         # Increment cycle count on success
         state["cycle_count"] = state.get("cycle_count", 0) + 1
         state["last_result_success"] = True
+        # Clear errors on success — the system has recovered
+        state["errors"] = []
         state["health"] = health
         save_state(state)
 

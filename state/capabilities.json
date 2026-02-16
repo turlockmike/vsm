@@ -28,7 +28,7 @@
         "communication",
         "owner"
       ],
-      "notes": "python3 core/comm.py 'subject' 'body'. Config in .env."
+      "notes": "send_message(text, channel='email', subject='...'). Writes to outbox/, sync_email.py delivers."
     },
     "manage-tasks": {
       "description": "Create and manage task queue in sandbox/tasks/",
@@ -58,6 +58,17 @@
         "self-check"
       ],
       "notes": "Checks: imports, .env, state dir, git, claude CLI, cron, agents. 7 checks."
+    },
+    "send-telegram": {
+      "description": "Send messages to owner via Telegram bot @mikes_vsm_bot",
+      "confidence": 0.85,
+      "times_used": 1,
+      "times_succeeded": 1,
+      "times_failed": 0,
+      "first_learned": "2026-02-15T18:00:00Z",
+      "last_used": "2026-02-15T18:00:00Z",
+      "tags": ["telegram", "communication", "owner"],
+      "notes": "Write JSON to state/outbox/ with channel=telegram. sync_telegram daemon delivers. chat_id=6073458597."
     }
   },
   "anti_patterns": {
@@ -91,22 +102,6 @@
     "exploration_rate": 0.15,
     "recent_experiments": []
   },
-  "pending_tasks": {
-    "telegram-setup": {
-      "title": "Establish Telegram as primary communication",
-      "status": "blocked-on-owner",
-      "blocked_by": "TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID",
-      "requested_at": "2026-02-15T20:30:00Z",
-      "owner_asked_via": "email",
-      "setup_path": [
-        "Owner provides TELEGRAM_BOT_TOKEN (from @BotFather) and TELEGRAM_CHAT_ID (from @getidsbot)",
-        "Add credentials to .env",
-        "Start telegram_daemon.sh as background process",
-        "Test two-way communication",
-        "Switch to Telegram as primary, email as backup"
-      ],
-      "notes": "sync_telegram.py exists and is ready. Scripts/inbox/outbox dirs ready. Just need credentials."
-    }
-  },
+  "pending_tasks": {},
   "updated": "2026-02-15T20:30:00Z"
 }

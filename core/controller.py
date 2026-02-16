@@ -379,6 +379,40 @@ def _try_merge_improvement(branch):
         pass  # Don't break the cycle over a merge issue
 
 
+def _maybe_send_status(state, health):
+    """Send status report every 4 hours via preferred channel."""
+    last_report = state.get("last_status_report")
+    if last_report:
+        hours = (datetime.now() - datetime.fromisoformat(last_report)).total_seconds() / 3600
+        if hours < 4:
+            return
+
+    cycle = state.get("cycle_count", 0)
+    crit = state.get("criticality", 0.5)
+    errs = len([e for e in state.get("errors", []) if _age_hours(e) < 4])
+    pending = health.get("pending_tasks", 0)
+
+    caps = load_capabilities()
+    cap_count = len(caps.get("capabilities", {}))
+    high_conf = sum(1 for c in caps.get("capabilities", {}).values() if c.get("confidence", 0) >= 0.8)
+
+    status = (
+        f"VSM Status (cycle {cycle})\n"
+        f"Health: {'good' if errs == 0 else f'{errs} errors'} | "
+        f"Tasks: {pending} pending | "
+        f"Capabilities: {high_conf}/{cap_count} high-confidence\n"
+        f"Criticality: {crit:.2f}"
+    )
+
+    # Import here to avoid circular deps
+    import sys
+    sys.path.insert(0, str(VSM_ROOT / "core"))
+    from comm import send_message
+    send_message(status)
+    state["last_status_report"] = datetime.now().isoformat()
+    print(f"[VSM] Status report sent")
+
+
 def main():
     state = load_state()
 
@@ -396,6 +430,9 @@ def main():
     health = check_health()
     state["health"] = health
     state["criticality"] = compute_criticality(state, health)
+
+    # Periodic status report (every 4 hours)
+    _maybe_send_status(state, health)
 
     tasks = gather_tasks()
     recent_logs = gather_recent_logs()

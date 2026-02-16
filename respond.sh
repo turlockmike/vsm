@@ -45,11 +45,40 @@ fi
 # === MESSAGES FOUND — RESPOND ===
 echo "[$(date -Iseconds)] $INBOX_COUNT messages in inbox" >> "$LOG"
 
-# Build message context
+# Build message context — include recent conversation history from archive
 MESSAGES=$(python3 -c "
 import json, os
+from pathlib import Path
+
 inbox = '$INBOX'
+archive = '$INBOX/archive'
 msgs = []
+
+# Load recent archived messages (last 10) for context
+archived = []
+if os.path.isdir(archive):
+    files = sorted(os.listdir(archive))
+    for f in files[-10:]:  # Last 10 archived messages
+        if not f.endswith('.json'): continue
+        try:
+            m = json.load(open(os.path.join(archive, f)))
+            archived.append({
+                'file': f,
+                'from': m.get('from', '?'),
+                'text': m.get('text', '')[:300],
+                'ts': m.get('timestamp', '')
+            })
+        except: pass
+
+# Show conversation context (archive + new)
+if archived:
+    msgs.append('## Recent conversation (context):')
+    for m in archived:
+        msgs.append(f'{m[\"ts\"]} {m[\"from\"]}: {m[\"text\"]}')
+    msgs.append('')
+    msgs.append('## New messages (respond to these):')
+
+# Current inbox messages
 for f in sorted(os.listdir(inbox)):
     if not f.endswith('.json'): continue
     try:

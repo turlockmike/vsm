@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-VSM Email Responder — Fast replies to owner emails.
-Runs every minute via cron. Independent from heartbeat.
+VSM Message Responder — reads inbox/ files, writes outbox/ files.
+No API calls. Sync daemons handle the plumbing.
+Works with email, telegram, or any channel that writes to inbox/.
 """
 
 import json
@@ -11,14 +12,11 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-import requests
-
 VSM_ROOT = Path(__file__).parent.parent
-STATE_DIR = VSM_ROOT / "state"
-REPLIED_FILE = STATE_DIR / "replied_threads.json"
-LOG_DIR = STATE_DIR / "logs"
+INBOX = VSM_ROOT / "state" / "inbox"
+OUTBOX = VSM_ROOT / "state" / "outbox"
+ARCHIVE = INBOX / "archive"
 TASKS_DIR = VSM_ROOT / "sandbox" / "tasks"
-BASE_URL = "https://api.agentmail.to/v0"
 CLAUDE_BIN = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
 
 
@@ -34,66 +32,11 @@ def load_config():
     return config
 
 
-def get_headers(config):
-    return {
-        "Authorization": f"Bearer {config['AGENTMAIL_API_KEY']}",
-        "Content-Type": "application/json",
-    }
+def classify_and_respond(sender_name, subject, message_text, channel):
+    """Use Claude to classify and draft a reply."""
+    prompt = f"""You are VSM, an autonomous AI computer system. Your owner messaged you via {channel}.
 
-
-def load_replied():
-    if REPLIED_FILE.exists():
-        return set(json.loads(REPLIED_FILE.read_text()).get("replied", []))
-    return set()
-
-
-def save_replied(replied_set):
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    REPLIED_FILE.write_text(json.dumps({"replied": list(replied_set)}))
-
-
-def get_unread_threads(config):
-    inbox = config.get("VSM_INBOX", "vsm-bot@agentmail.to")
-    resp = requests.get(
-        f"{BASE_URL}/inboxes/{inbox}/threads",
-        headers=get_headers(config),
-        params={"labels": "unread", "limit": 10},
-    )
-    resp.raise_for_status()
-    return resp.json().get("threads", [])
-
-
-def get_thread_messages(config, thread_id):
-    inbox = config.get("VSM_INBOX", "vsm-bot@agentmail.to")
-    resp = requests.get(
-        f"{BASE_URL}/inboxes/{inbox}/threads/{thread_id}",
-        headers=get_headers(config),
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def send_reply(config, thread_id, to_email, subject, body):
-    inbox = config.get("VSM_INBOX", "vsm-bot@agentmail.to")
-    resp = requests.post(
-        f"{BASE_URL}/inboxes/{inbox}/messages/send",
-        headers=get_headers(config),
-        json={
-            "to": to_email,
-            "subject": f"Re: {subject}",
-            "text": body,
-            "thread_id": thread_id,
-        },
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def classify_and_respond(sender_name, subject, message_text):
-    """Classify email and respond. Returns (reply_body, task_dict_or_none)."""
-    prompt = f"""You are VSM, an autonomous AI computer system. Your owner emailed you.
-
-CLASSIFY this email:
+CLASSIFY this message:
 CLASSIFY: question (quick Q&A, status check, conversation)
 CLASSIFY: task (build/fix/create something, multi-step work)
 
@@ -122,9 +65,9 @@ Message:
             return None, None
 
         output = result.stdout.strip()
-        is_task = False
         reply_lines = []
         task_info = {}
+        is_task = False
 
         for line in output.split("\n"):
             s = line.strip()
@@ -151,9 +94,9 @@ Message:
         return None, None
 
 
-def create_task(task_info, thread_id, subject, sender):
+def create_task(task_info, source_file):
     TASKS_DIR.mkdir(parents=True, exist_ok=True)
-    existing = list(TASKS_DIR.glob("*.json"))
+    existing = [f for f in TASKS_DIR.glob("*.json") if f.name != "archive"]
     max_id = 0
     for f in existing:
         try:
@@ -168,8 +111,7 @@ def create_task(task_info, thread_id, subject, sender):
         "title": task_info["title"],
         "description": task_info.get("description", ""),
         "priority": task_info.get("priority", 5),
-        "source": "email",
-        "thread_id": thread_id,
+        "source": source_file,
         "created_at": datetime.now().isoformat(),
     }
 
@@ -179,65 +121,68 @@ def create_task(task_info, thread_id, subject, sender):
     return task_id
 
 
-def main():
+def process_inbox():
+    """Read inbox/ files, generate replies, write to outbox/, archive originals."""
+    ARCHIVE.mkdir(parents=True, exist_ok=True)
+    OUTBOX.mkdir(parents=True, exist_ok=True)
     config = load_config()
-    replied = load_replied()
-    owner_email = config.get("OWNER_EMAIL", "")
 
-    try:
-        threads = get_unread_threads(config)
-    except Exception as e:
-        print(f"[email] Error: {e}")
-        return
-
-    if not threads:
-        return
-
-    for thread_summary in threads:
-        thread_id = thread_summary["thread_id"]
-        if thread_id in replied:
-            continue
-
+    for f in sorted(INBOX.glob("*.json")):
         try:
-            thread = get_thread_messages(config, thread_id)
+            msg = json.loads(f.read_text())
         except Exception:
             continue
 
-        messages = thread.get("messages", [])
-        if not messages:
+        channel = msg.get("channel", "email")
+        sender = msg.get("from", "Owner")
+        subject = msg.get("subject", "(message)")
+        text = msg.get("text", "")
+
+        if not text.strip():
+            f.rename(ARCHIVE / f.name)
             continue
 
-        last_msg = messages[-1]
-        sender = last_msg.get("from", "")
-
-        if owner_email not in sender:
-            replied.add(thread_id)
-            save_replied(replied)
-            continue
-
-        subject = thread.get("subject", "(no subject)")
-        text = last_msg.get("text", "")
         sender_name = sender.split("<")[0].strip() if "<" in sender else sender
+        print(f"[respond] Processing {channel}: {subject}")
 
-        print(f"[email] Processing: {subject}")
+        reply_body, task_info = classify_and_respond(sender_name, subject, text, channel)
 
-        reply_body, task_info = classify_and_respond(sender_name, subject, text)
         if not reply_body:
-            # Fallback: acknowledge receipt even if Claude fails
-            reply_body = (
-                f"Got your message. I'm having trouble generating a full response "
-                f"right now, but I've received it and will follow up shortly."
-            )
-            print(f"[email] Fallback reply: {subject}")
+            reply_body = "Got it. Working on it."
+
+        # Write reply to outbox
+        reply_file = OUTBOX / f"reply_{f.stem}.json"
+
+        if channel == "email":
+            reply_file.write_text(json.dumps({
+                "channel": "email",
+                "to": config.get("OWNER_EMAIL", ""),
+                "subject": f"Re: {subject}",
+                "text": reply_body,
+                "thread_id": msg.get("thread_id"),
+                "sent": False,
+            }, indent=2))
+        elif channel == "telegram":
+            reply_file.write_text(json.dumps({
+                "channel": "telegram",
+                "chat_id": msg.get("chat_id", config.get("TELEGRAM_CHAT_ID", "")),
+                "text": reply_body,
+                "sent": False,
+            }, indent=2))
 
         if task_info:
-            task_id = create_task(task_info, thread_id, subject, sender)
-            print(f"[email] Task {task_id}: {task_info['title']}")
+            tid = create_task(task_info, f.name)
+            print(f"[respond] Task {tid}: {task_info['title']}")
 
-        send_reply(config, thread_id, owner_email, subject, reply_body)
-        replied.add(thread_id)
-        save_replied(replied)
-        print(f"[email] Replied: {subject}")
+        print(f"[respond] Reply queued via {channel}: {subject}")
+
+        # Archive processed message
+        f.rename(ARCHIVE / f.name)
+
+
+def main():
+    INBOX.mkdir(parents=True, exist_ok=True)
+    process_inbox()
 
 
 if __name__ == "__main__":

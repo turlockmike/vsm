@@ -1,6 +1,7 @@
 .env
 state/logs/
 state/inbox/
+state/inbox_archive/
 state/outbox/
 state/experiences.jsonl
 state/replied_threads.json

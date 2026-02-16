@@ -3,12 +3,12 @@
   "capabilities": {
     "git-commit": {
       "description": "Commit changes to git and push to remote",
-      "confidence": 0.75,
-      "times_used": 2,
-      "times_succeeded": 2,
+      "confidence": 0.8,
+      "times_used": 3,
+      "times_succeeded": 3,
       "times_failed": 0,
       "first_learned": "2026-02-16T01:00:00Z",
-      "last_used": "2026-02-15T17:49:18.874604",
+      "last_used": "2026-02-15T18:07:08.173608",
       "tags": [
         "git",
         "infrastructure"
@@ -17,18 +17,18 @@
     },
     "send-email": {
       "description": "Send email to owner via agentmail.to API",
-      "confidence": 0.67,
-      "times_used": 1,
-      "times_succeeded": 1,
+      "confidence": 0.75,
+      "times_used": 2,
+      "times_succeeded": 2,
       "times_failed": 0,
       "first_learned": "2026-02-16T01:00:00Z",
-      "last_used": "2026-02-15T17:51:45.979248",
+      "last_used": "2026-02-15T18:01:45.409445",
       "tags": [
         "email",
         "communication",
         "owner"
       ],
-      "notes": "send_message(text, channel='email', subject='...'). Writes to outbox/, sync_email.py delivers."
+      "notes": "python3 core/comm.py 'subject' 'body'. Config in .env."
     },
     "manage-tasks": {
       "description": "Create and manage task queue in sandbox/tasks/",
@@ -59,16 +59,20 @@
       ],
       "notes": "Checks: imports, .env, state dir, git, claude CLI, cron, agents. 7 checks."
     },
-    "send-telegram": {
-      "description": "Send messages to owner via Telegram bot @mikes_vsm_bot",
-      "confidence": 0.85,
+    "inbox-processing": {
+      "description": "Read owner messages from inbox/, inject into brain prompt, archive after processing",
+      "confidence": 0.7,
       "times_used": 1,
       "times_succeeded": 1,
       "times_failed": 0,
-      "first_learned": "2026-02-15T18:00:00Z",
-      "last_used": "2026-02-15T18:00:00Z",
-      "tags": ["telegram", "communication", "owner"],
-      "notes": "Write JSON to state/outbox/ with channel=telegram. sync_telegram daemon delivers. chat_id=6073458597."
+      "first_learned": "2026-02-15T18:15:00Z",
+      "last_used": "2026-02-15T18:15:00Z",
+      "tags": [
+        "inbox",
+        "communication",
+        "controller"
+      ],
+      "notes": "gather_inbox() in controller.py reads state/inbox/*.json, build_prompt adds INBOX section, archive_inbox() moves to inbox_archive/ after cycle."
     }
   },
   "anti_patterns": {
@@ -98,10 +102,16 @@
     }
   },
   "exploration_log": {
-    "last_exploration_cycle": 0,
+    "last_exploration_cycle": 5,
     "exploration_rate": 0.15,
-    "recent_experiments": []
+    "recent_experiments": [
+      {
+        "cycle": 5,
+        "hypothesis": "Inbox processing in controller enables real-time owner interaction",
+        "result": "success \u2014 gather_inbox, archive_inbox, prompt injection all added"
+      }
+    ]
   },
   "pending_tasks": {},
-  "updated": "2026-02-15T20:30:00Z"
+  "updated": "2026-02-15T18:09:30.487750"
 }

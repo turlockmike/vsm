@@ -31,6 +31,8 @@ STATE_DIR = VSM_ROOT / "state"
 STATE_FILE = STATE_DIR / "state.json"
 LOG_DIR = STATE_DIR / "logs"
 TASKS_DIR = VSM_ROOT / "sandbox" / "tasks"
+INBOX_DIR = STATE_DIR / "inbox"
+ARCHIVE_DIR = STATE_DIR / "inbox_archive"
 CLAUDE_BIN = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
 
 
@@ -101,6 +103,35 @@ def gather_tasks():
     return tasks
 
 
+def gather_inbox():
+    """Read unprocessed messages from inbox/. Returns list of messages."""
+    if not INBOX_DIR.exists():
+        return []
+    messages = []
+    for f in sorted(INBOX_DIR.glob("*.json")):
+        try:
+            msg = json.loads(f.read_text())
+            messages.append({
+                "file": f.name,
+                "from": msg.get("from", "unknown"),
+                "text": msg.get("text", "")[:500],
+                "channel": msg.get("channel", "unknown"),
+                "timestamp": msg.get("timestamp", ""),
+            })
+        except Exception:
+            pass
+    return messages
+
+
+def archive_inbox(messages):
+    """Move processed inbox files to archive."""
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+    for msg in messages:
+        src = INBOX_DIR / msg["file"]
+        if src.exists():
+            src.rename(ARCHIVE_DIR / msg["file"])
+
+
 def gather_recent_logs(n=3):
     if not LOG_DIR.exists():
         return []
@@ -150,8 +181,19 @@ def compute_criticality(state, health):
     return round(max(0.0, min(1.0, 0.5 - (chaos * 0.5) + (stagnation * 0.5))), 2)
 
 
-def build_prompt(state, health, tasks, recent_logs, capabilities, is_exploration):
+def build_prompt(state, health, tasks, recent_logs, capabilities, is_exploration, inbox=None):
     sections = []
+
+    # Inbox messages — owner requests are priority #1
+    if inbox:
+        lines = ["## INBOX — Owner Messages (respond to these FIRST)\n"]
+        for msg in inbox:
+            lines.append(f"- [{msg['channel']}] {msg['from']} ({msg['timestamp']}): {msg['text']}")
+        lines.append(
+            "\nRespond to each message using: python3 core/comm.py 'your reply text'\n"
+            "Owner messages override all other work. Be fast and direct."
+        )
+        sections.append("\n".join(lines))
 
     # Capabilities
     caps = capabilities.get("capabilities", {})
@@ -436,24 +478,29 @@ def main():
 
     tasks = gather_tasks()
     recent_logs = gather_recent_logs()
+    inbox = gather_inbox()
+
+    if inbox:
+        print(f"[VSM] Inbox: {len(inbox)} message(s) from owner — priority mode")
 
     # Skip if nothing to do and no heartbeat
     heartbeat = VSM_ROOT / "HEARTBEAT.md"
-    if not tasks and not heartbeat.exists():
-        print("[VSM] Idle: no tasks, no heartbeat")
+    if not tasks and not inbox and not heartbeat.exists():
+        print("[VSM] Idle: no tasks, no inbox, no heartbeat")
         save_state(state)
         return
 
     # === LEARNING CONTEXT ===
     capabilities = load_capabilities()
-    is_exploration = should_explore(capabilities, state)
+    # If inbox has messages, skip exploration — owner requests are priority
+    is_exploration = should_explore(capabilities, state) if not inbox else False
 
     if is_exploration:
         rate = capabilities.get("exploration_log", {}).get("exploration_rate", 0.15)
         print(f"[VSM] Exploration cycle (rate: {rate:.0%})")
 
     # === DECIDE + ACT ===
-    prompt = build_prompt(state, health, tasks, recent_logs, capabilities, is_exploration)
+    prompt = build_prompt(state, health, tasks, recent_logs, capabilities, is_exploration, inbox=inbox)
     print(f"[VSM] Cycle {state['cycle_count']} | crit={state['criticality']} | invoking System 5")
 
     result = run_claude(prompt, model="opus", timeout=300)
@@ -476,6 +523,11 @@ def main():
             "cost_usd": result.get("cost_usd", 0),
             "summary": result["output"][:300],
         }, indent=2))
+
+        # Archive processed inbox messages
+        if inbox:
+            archive_inbox(inbox)
+            print(f"[VSM] Archived {len(inbox)} inbox message(s)")
 
         # === REFLECT ===
         experience = extract_experience(result, state, tasks)

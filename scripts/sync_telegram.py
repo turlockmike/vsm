@@ -9,6 +9,7 @@ Run as a background daemon (not cron — needs persistent polling).
 """
 
 import json
+import subprocess
 import time
 import sys
 from datetime import datetime
@@ -78,6 +79,7 @@ def pull_messages(config):
         print(f"[sync-tg] Poll error: {e}")
         return
 
+    new_messages = False
     for update in updates:
         offset = update["update_id"] + 1
         msg = update.get("message")
@@ -107,8 +109,19 @@ def pull_messages(config):
             "chat_id": chat_id,
         }, indent=2))
         print(f"[sync-tg] Received: {msg['text'][:80]}")
+        new_messages = True
 
     save_offset(offset)
+
+    # Kick the brain if new messages arrived (don't wait for cron)
+    if new_messages:
+        brain = VSM_ROOT / "brain.sh"
+        if brain.exists():
+            subprocess.Popen(
+                [str(brain)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            print("[sync-tg] Kicked brain.sh")
 
 
 def push_replies(config):

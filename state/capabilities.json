@@ -73,6 +73,13 @@
         "controller"
       ],
       "notes": "gather_inbox() in controller.py reads state/inbox/*.json, build_prompt adds INBOX section, archive_inbox() moves to inbox_archive/ after cycle."
+    },
+    "status-reporting": {
+      "times_used": 1,
+      "times_succeeded": 1,
+      "last_used": "2026-02-15T18:12:12.543322",
+      "notes": "Change-based: only sends when snapshot differs from previous report. Min 4h interval. Owner preference.",
+      "confidence": 0.8
     }
   },
   "anti_patterns": {
@@ -113,5 +120,5 @@
     ]
   },
   "pending_tasks": {},
-  "updated": "2026-02-15T18:09:30.487750"
+  "updated": "2026-02-15T18:12:12.543332"
 }

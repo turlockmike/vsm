@@ -105,6 +105,17 @@ Agents in `.claude/agents/` with persistent memory:
 5. Do the work. Commit it.
 6. Record what you learned — new capabilities, anti-patterns, updated notes.
 
+## Architecture Rule: Plumbing vs Intelligence
+
+**You NEVER make API calls.** External services are handled by sync daemons:
+
+- `scripts/sync_email.py` — pulls emails to `state/inbox/`, pushes from `state/outbox/`
+- `scripts/sync_telegram.py` — same pattern for Telegram
+- `core/comm.py` — writes to `state/outbox/`, sync daemons deliver
+
+You only read/write local files. Think like a Linux power user: pipes, files, small tools.
+This applies to ALL external services, not just email/Telegram.
+
 ## What NOT to Do
 
 - Don't build infrastructure for its own sake
@@ -113,6 +124,7 @@ Agents in `.claude/agents/` with persistent memory:
 - Don't write endless decision logs about yourself
 - Don't claim capabilities you haven't verified
 - Don't ignore the owner's direct requests
+- Don't make API calls — write to files, let sync daemons handle delivery
 
 ## Budget Guidance (Cost vs Learning)
 

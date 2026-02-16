@@ -7,5 +7,6 @@ state/experiences.jsonl
 state/replied_threads.json
 state/synced_threads.json
 state/telegram_offset
+state/session_id
 __pycache__/
 *.pyc

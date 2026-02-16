@@ -3,26 +3,26 @@
   "capabilities": {
     "git-commit": {
       "description": "Commit changes to git and push to remote",
-      "confidence": 0.67,
-      "times_used": 1,
-      "times_succeeded": 1,
+      "confidence": 0.75,
+      "times_used": 2,
+      "times_succeeded": 2,
       "times_failed": 0,
       "first_learned": "2026-02-16T01:00:00Z",
-      "last_used": "2026-02-15T17:42:20.003958",
+      "last_used": "2026-02-15T17:45:00Z",
       "tags": [
         "git",
         "infrastructure"
       ],
-      "notes": "Pull before commit if remote may have changed."
+      "notes": "Pull before commit if remote may have changed. Push verified working to origin."
     },
     "send-email": {
       "description": "Send email to owner via agentmail.to API",
-      "confidence": 0.8,
-      "times_used": 0,
-      "times_succeeded": 0,
+      "confidence": 0.75,
+      "times_used": 1,
+      "times_succeeded": 1,
       "times_failed": 0,
       "first_learned": "2026-02-16T01:00:00Z",
-      "last_used": null,
+      "last_used": "2026-02-15T17:45:00Z",
       "tags": [
         "email",
         "communication",

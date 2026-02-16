@@ -2,5 +2,6 @@
 state/logs/
 state/experiences.jsonl
 state/replied_threads.json
+state/telegram_state.json
 __pycache__/
 *.pyc

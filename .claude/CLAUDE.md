@@ -114,6 +114,17 @@ Agents in `.claude/agents/` with persistent memory:
 - Don't claim capabilities you haven't verified
 - Don't ignore the owner's direct requests
 
+## Budget Guidance (Cost vs Learning)
+
+Cost discipline is helpful, but NOT at the expense of capability growth.
+
+- **Exploration ($0.50/cycle)**: Use Sonnet for learning experiments. Cheap is the wrong optimization.
+- **Complex tasks**: Use Opus. Better thinking beats cost savings.
+- **Agent work**: Agents have persistent memory. Invest in delegation, not cost-cutting.
+- **Test before deploying**: Run experiments on smaller models, then validate on full problem with best model.
+
+When in doubt: **The system that learns fastest wins.** Pay for better thinking.
+
 ## Environment
 
 - Claude running non-interactively via `claude -p` from cron (every 5 min)

@@ -1,8 +1,0 @@
-{
-  "id": "029",
-  "title": "Interactive web terminal and task management UI",
-  "description": "The current dashboard is read-only status display. To compete with OpenClaw's web UI, VSM needs: (1) task creation/editing from the web, (2) a chat/command interface to interact with VSM from the browser, (3) live log streaming. This is the 'developer workstation' the owner wants — a place to manage all work including agent interactions. Start with task CRUD and a simple command input that creates tasks.",
-  "priority": 6,
-  "source": "owner-directive",
-  "created_at": "2026-02-15T03:30:00"
-}

@@ -1,8 +1,0 @@
-{
-  "id": "017",
-  "title": "Research FUSE-based context management",
-  "description": "Token audit DONE (cycle 6): slimmed controller prompt from ~5000 to ~1500 tokens, capped observations at 4KB, filtered blocked tasks, stripped email quoted text, migrated weekly_status to Maildir. REMAINING: Research 'FUSE is all you need' — understand how FUSE mounts can serve context to Claude without burning tokens on file reads.",
-  "priority": 6,
-  "source": "owner-directive",
-  "created_at": "2026-02-15T01:08:00Z"
-}

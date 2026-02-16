@@ -47,11 +47,20 @@ def save_offset(offset):
     OFFSET_FILE.write_text(str(offset))
 
 
+def _save_chat_id(chat_id):
+    """Auto-save discovered chat_id to .env for future use."""
+    env_file = VSM_ROOT / ".env"
+    content = env_file.read_text()
+    if "TELEGRAM_CHAT_ID" not in content:
+        with open(env_file, "a") as f:
+            f.write(f"\nTELEGRAM_CHAT_ID={chat_id}\n")
+
+
 def pull_messages(config):
     """Long-poll Telegram → write incoming messages to inbox/."""
     token = config.get("TELEGRAM_BOT_TOKEN", "")
     owner_id = config.get("TELEGRAM_CHAT_ID", "")
-    if not token or not owner_id:
+    if not token:
         return
 
     api = f"https://api.telegram.org/bot{token}"
@@ -76,7 +85,13 @@ def pull_messages(config):
             continue
 
         chat_id = str(msg["chat"]["id"])
-        if chat_id != str(owner_id):
+
+        # If no owner_id configured, accept first message and save chat_id
+        if not owner_id:
+            owner_id = chat_id
+            _save_chat_id(chat_id)
+            print(f"[sync-tg] Auto-discovered owner chat_id: {chat_id}")
+        elif chat_id != str(owner_id):
             continue
 
         # Write to shared inbox
@@ -100,7 +115,7 @@ def push_replies(config):
     """Send outbox/ files tagged as telegram."""
     token = config.get("TELEGRAM_BOT_TOKEN", "")
     owner_id = config.get("TELEGRAM_CHAT_ID", "")
-    if not token or not owner_id:
+    if not token:
         return
 
     api = f"https://api.telegram.org/bot{token}"

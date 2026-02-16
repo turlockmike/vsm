@@ -421,38 +421,66 @@ def _try_merge_improvement(branch):
         pass  # Don't break the cycle over a merge issue
 
 
+def _build_status_snapshot(state, health):
+    """Build a comparable status snapshot for change detection."""
+    caps = load_capabilities()
+    errs = len([e for e in state.get("errors", []) if _age_hours(e) < 4])
+    return {
+        "errors": errs,
+        "pending": health.get("pending_tasks", 0),
+        "cap_count": len(caps.get("capabilities", {})),
+        "high_conf": sum(1 for c in caps.get("capabilities", {}).values()
+                         if c.get("confidence", 0) >= 0.8),
+        "crit": round(state.get("criticality", 0.5), 1),
+    }
+
+
 def _maybe_send_status(state, health):
-    """Send status report every 4 hours via preferred channel."""
+    """Send status report only when something meaningful changed (minimum 4h apart)."""
     last_report = state.get("last_status_report")
     if last_report:
         hours = (datetime.now() - datetime.fromisoformat(last_report)).total_seconds() / 3600
         if hours < 4:
             return
 
+    current = _build_status_snapshot(state, health)
+    previous = state.get("last_status_snapshot")
+
+    # Skip if nothing changed since last report
+    if previous and current == previous:
+        return
+
     cycle = state.get("cycle_count", 0)
-    crit = state.get("criticality", 0.5)
-    errs = len([e for e in state.get("errors", []) if _age_hours(e) < 4])
-    pending = health.get("pending_tasks", 0)
+    changes = []
+    if previous:
+        if current["errors"] != previous.get("errors", 0):
+            changes.append(f"errors: {previous.get('errors', 0)} -> {current['errors']}")
+        if current["cap_count"] != previous.get("cap_count", 0):
+            changes.append(f"capabilities: {previous.get('cap_count', 0)} -> {current['cap_count']}")
+        if current["pending"] != previous.get("pending", 0):
+            changes.append(f"tasks: {previous.get('pending', 0)} -> {current['pending']}")
+        if current["crit"] != previous.get("crit", 0.5):
+            changes.append(f"criticality: {previous.get('crit', 0.5)} -> {current['crit']}")
 
-    caps = load_capabilities()
-    cap_count = len(caps.get("capabilities", {}))
-    high_conf = sum(1 for c in caps.get("capabilities", {}).values() if c.get("confidence", 0) >= 0.8)
+    if not changes and previous:
+        return  # No meaningful changes
 
-    status = (
-        f"VSM Status (cycle {cycle})\n"
-        f"Health: {'good' if errs == 0 else f'{errs} errors'} | "
-        f"Tasks: {pending} pending | "
-        f"Capabilities: {high_conf}/{cap_count} high-confidence\n"
-        f"Criticality: {crit:.2f}"
-    )
+    status = f"VSM Status (cycle {cycle})\n"
+    if changes:
+        status += "Changes: " + ", ".join(changes)
+    else:
+        status += (
+            f"Health: {'good' if current['errors'] == 0 else str(current['errors']) + ' errors'} | "
+            f"Capabilities: {current['high_conf']}/{current['cap_count']} high-confidence"
+        )
 
-    # Import here to avoid circular deps
     import sys
     sys.path.insert(0, str(VSM_ROOT / "core"))
     from comm import send_message
     send_message(status)
     state["last_status_report"] = datetime.now().isoformat()
-    print(f"[VSM] Status report sent")
+    state["last_status_snapshot"] = current
+    print(f"[VSM] Status report sent (changes detected)")
 
 
 def main():

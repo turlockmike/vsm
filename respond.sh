@@ -144,8 +144,12 @@ if [ -n "$NEW_SID" ]; then
     echo "$NEW_SID" > "$SESSION_FILE"
 fi
 
-# Push replies
+# Push replies (both email and telegram)
 python3 scripts/sync_email.py 2>>"$LOG" || true
+python3 scripts/sync_telegram.py 2>>"$LOG" &
+SYNC_PID=$!
+sleep 2  # Give sync daemon time to push
+kill $SYNC_PID 2>/dev/null || true
 
 COST=$(echo "$RESULT" | jq -r '.total_cost_usd // 0' 2>/dev/null)
 echo "[$(date -Iseconds)] Responded: cost=\$$COST" >> "$LOG"

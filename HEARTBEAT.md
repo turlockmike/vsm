@@ -28,6 +28,13 @@ Standing orders for every cycle. Read this. Follow it. Don't repeat recent work 
 - What would make this system worth installing for someone else?
 - Ship the smallest version of the highest-value thing.
 
+## 5. Self-Improvement Notifications (every 10 cycles)
+
+- After consolidation and improvement, send owner a Telegram summary of what changed
+- Include: new capabilities learned, capabilities improved, anti-patterns avoided, auditor findings, improver changes
+- Use: python3 core/comm.py "improvement summary here" (auto-picks Telegram)
+- Owner wants visibility into the learning loop
+
 ## Rules
 
 - Learning > shipping. A capability gained beats a feature committed.

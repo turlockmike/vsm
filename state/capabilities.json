@@ -33,6 +33,17 @@
       "last_used": null,
       "tags": ["tasks", "planning"],
       "notes": "JSON files with id, title, description, priority, status."
+    },
+    "health-check": {
+      "description": "Run system health diagnostics via python3 core/health_check.py",
+      "confidence": 0.90,
+      "times_used": 1,
+      "times_succeeded": 1,
+      "times_failed": 0,
+      "first_learned": "2026-02-15T22:00:00Z",
+      "last_used": "2026-02-15T22:00:00Z",
+      "tags": ["diagnostics", "infrastructure", "self-check"],
+      "notes": "Checks: imports, .env, state dir, git, claude CLI, cron, agents. 7 checks."
     }
   },
   "anti_patterns": {

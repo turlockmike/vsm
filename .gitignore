@@ -1,5 +1,6 @@
 .env
 state/logs/
 state/experiences.jsonl
+state/replied_threads.json
 __pycache__/
 *.pyc

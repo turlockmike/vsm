@@ -1,7 +1,10 @@
 .env
 state/logs/
+state/inbox/
+state/outbox/
 state/experiences.jsonl
 state/replied_threads.json
-state/telegram_state.json
+state/synced_threads.json
+state/telegram_offset
 __pycache__/
 *.pyc

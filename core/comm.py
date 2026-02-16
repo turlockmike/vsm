@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Send email via agentmail.to API."""
+"""
+Send messages to owner — writes to outbox/ files.
+Sync daemons handle actual delivery.
+"""
 
+import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
-import requests
-
 VSM_ROOT = Path(__file__).parent.parent
+OUTBOX = VSM_ROOT / "state" / "outbox"
 
 
 def load_config():
@@ -21,28 +25,41 @@ def load_config():
     return config
 
 
-def send_email(subject, body, to=None):
+def send_message(text, channel=None, subject=None):
+    """Queue a message for delivery. Auto-picks best channel if not specified."""
     config = load_config()
-    api_key = config.get("AGENTMAIL_API_KEY", "")
-    inbox = config.get("VSM_INBOX", "vsm-bot@agentmail.to")
-    to = to or config.get("OWNER_EMAIL", "")
+    OUTBOX.mkdir(parents=True, exist_ok=True)
 
-    if not api_key or not to:
-        print("Missing AGENTMAIL_API_KEY or OWNER_EMAIL in .env")
-        return False
+    if channel is None:
+        # Prefer telegram if configured, fall back to email
+        channel = "telegram" if config.get("TELEGRAM_BOT_TOKEN") else "email"
 
-    resp = requests.post(
-        f"https://api.agentmail.to/v0/inboxes/{inbox}/messages/send",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json={"to": to, "subject": subject, "text": body},
-    )
-    return resp.status_code == 200
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+
+    if channel == "telegram":
+        msg = {
+            "channel": "telegram",
+            "chat_id": config.get("TELEGRAM_CHAT_ID", ""),
+            "text": text,
+            "sent": False,
+        }
+    else:
+        msg = {
+            "channel": "email",
+            "to": config.get("OWNER_EMAIL", ""),
+            "subject": subject or "[VSM] Notification",
+            "text": text,
+            "sent": False,
+        }
+
+    outfile = OUTBOX / f"notify_{ts}.json"
+    outfile.write_text(json.dumps(msg, indent=2))
+    return True
 
 
 if __name__ == "__main__":
-    if len(sys.argv) >= 3:
-        ok = send_email(sys.argv[1], sys.argv[2])
-        print("Sent" if ok else "Failed")
+    if len(sys.argv) >= 2:
+        subject = sys.argv[1] if len(sys.argv) >= 3 else None
+        body = sys.argv[-1]
+        ok = send_message(body, subject=subject)
+        print("Queued" if ok else "Failed")

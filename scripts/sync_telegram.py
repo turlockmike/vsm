@@ -179,6 +179,7 @@ def main():
             config = load_config()  # Re-read in case .env changes
             pull_messages(config)
             push_replies(config)
+            time.sleep(1)  # Brief pause between cycles to avoid hammering API
         except KeyboardInterrupt:
             print("\n[sync-tg] Stopped")
             break

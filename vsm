@@ -1,38 +1,31 @@
 #!/usr/bin/env bash
-# Connect to VSM interactively — same brain as heartbeat + responder
-# Holds BOTH lockfiles so neither cron job fires while you're talking
+# vsm — Interactive VSM session
+#
+# Only acquires the brain lock. Responder keeps running so owner still
+# gets Telegram/email replies while working interactively.
+#
+# Uses its own session (not shared with brain) for clean separation.
+
 set -euo pipefail
 
 VSM_ROOT="$HOME/projects/vsm/v2"
-SESSION_FILE="$VSM_ROOT/state/session_id"
-BRAIN_LOCK="/tmp/vsm-brain.lock"
-RESPOND_LOCK="/tmp/vsm-respond.lock"
+BRAIN_LOCK="$VSM_ROOT/state/actors/brain/lock"
 
 cd "$VSM_ROOT"
 
-# Wait for any running processes to finish
-for LOCK in "$BRAIN_LOCK" "$RESPOND_LOCK"; do
-    if [ -f "$LOCK" ]; then
-        pid=$(cat "$LOCK" 2>/dev/null)
-        if kill -0 "$pid" 2>/dev/null; then
-            echo "Waiting for VSM process (pid $pid)..."
-            while kill -0 "$pid" 2>/dev/null; do sleep 1; done
-        fi
-        rm -f "$LOCK"
+# Wait for brain to finish if running
+if [ -f "$BRAIN_LOCK" ]; then
+    pid=$(cat "$BRAIN_LOCK" 2>/dev/null || echo "")
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        echo "Waiting for brain (pid $pid) to finish..."
+        while kill -0 "$pid" 2>/dev/null; do sleep 1; done
     fi
-done
-
-# Hold both locks — cron backs off completely
-echo $$ > "$BRAIN_LOCK"
-echo $$ > "$RESPOND_LOCK"
-trap 'rm -f "$BRAIN_LOCK" "$RESPOND_LOCK"' EXIT
-
-ARGS=""
-if [ -f "$SESSION_FILE" ]; then
-    SID=$(cat "$SESSION_FILE")
-    if [ -n "$SID" ]; then
-        ARGS="--resume $SID"
-    fi
+    rm -f "$BRAIN_LOCK"
 fi
 
-claude $ARGS
+# Hold brain lock — cron brain backs off while we're here
+echo $$ > "$BRAIN_LOCK"
+trap 'rm -f "$BRAIN_LOCK"' EXIT
+
+# Interactive session — own session, not shared with cron brain
+claude

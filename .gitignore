@@ -8,5 +8,7 @@ state/replied_threads.json
 state/synced_threads.json
 state/telegram_offset
 state/session_id
+state/actors/
+state/RESET
 __pycache__/
 *.pyc

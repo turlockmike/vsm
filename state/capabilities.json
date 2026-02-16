@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "capabilities": {
     "git-commit": {
       "description": "Commit changes to git and push to remote",
@@ -9,10 +9,7 @@
       "times_failed": 0,
       "first_learned": "2026-02-16T01:00:00Z",
       "last_used": "2026-02-15T18:07:08.173608",
-      "tags": [
-        "git",
-        "infrastructure"
-      ],
+      "tags": ["git", "infrastructure"],
       "notes": "Pull before commit if remote may have changed."
     },
     "send-email": {
@@ -23,26 +20,8 @@
       "times_failed": 0,
       "first_learned": "2026-02-16T01:00:00Z",
       "last_used": "2026-02-15T18:01:45.409445",
-      "tags": [
-        "email",
-        "communication",
-        "owner"
-      ],
-      "notes": "Write JSON to state/outbox/. Sync daemons deliver. Or: python3 core/comm.py 'text'. Config in .env."
-    },
-    "manage-tasks": {
-      "description": "Create and manage task queue in sandbox/tasks/",
-      "confidence": 0.85,
-      "times_used": 0,
-      "times_succeeded": 0,
-      "times_failed": 0,
-      "first_learned": "2026-02-16T01:00:00Z",
-      "last_used": null,
-      "tags": [
-        "tasks",
-        "planning"
-      ],
-      "notes": "JSON files with id, title, description, priority, status."
+      "tags": ["email", "communication", "owner"],
+      "notes": "Write JSON to state/outbox/. Sync daemons deliver."
     },
     "health-check": {
       "description": "Run system health diagnostics via python3 core/health_check.py",
@@ -52,34 +31,41 @@
       "times_failed": 0,
       "first_learned": "2026-02-15T22:00:00Z",
       "last_used": "2026-02-15T22:00:00Z",
-      "tags": [
-        "diagnostics",
-        "infrastructure",
-        "self-check"
-      ],
-      "notes": "Checks: imports, .env, state dir, git, claude CLI, cron, agents. 7 checks."
+      "tags": ["diagnostics", "infrastructure"],
+      "notes": "Checks imports, .env, state, git, claude CLI, actors, cron, agents, skills, telegram daemon."
     },
     "inbox-processing": {
-      "description": "Read owner messages from inbox/, inject into brain prompt, archive after processing",
+      "description": "Read owner messages from responder mailbox, reply via outbox, escalate complex questions to brain",
       "confidence": 0.7,
       "times_used": 1,
       "times_succeeded": 1,
       "times_failed": 0,
       "first_learned": "2026-02-15T18:15:00Z",
       "last_used": "2026-02-15T18:15:00Z",
-      "tags": [
-        "inbox",
-        "communication",
-        "controller"
-      ],
-      "notes": "respond.sh builds inbox context from state/inbox/*.json, feeds to Claude. Inbox files moved to state/inbox/archive/ after processing."
+      "tags": ["inbox", "communication"],
+      "notes": "Router delivers to responder mailbox. Responder replies or escalates to brain."
     },
-    "status-reporting": {
-      "times_used": 1,
-      "times_succeeded": 1,
-      "last_used": "2026-02-15T18:12:12.543322",
-      "notes": "Change-based: only sends when snapshot differs from previous report. Min 4h interval. Owner preference.",
-      "confidence": 0.8
+    "actor-management": {
+      "description": "Spawn and manage sub-agents via Task tool, create worktrees for write agents, merge results",
+      "confidence": 0.5,
+      "times_used": 0,
+      "times_succeeded": 0,
+      "times_failed": 0,
+      "first_learned": "2026-02-16T04:00:00Z",
+      "last_used": null,
+      "tags": ["delegation", "orchestration", "sub-agents"],
+      "notes": "Write agents (builder/improver) need git worktrees. Read agents (researcher/auditor) work in v2/. Brain serializes all merges."
+    },
+    "self-improvement": {
+      "description": "Run 10-cycle improvement loop: consolidate, audit, improve, merge, notify",
+      "confidence": 0.5,
+      "times_used": 0,
+      "times_succeeded": 0,
+      "times_failed": 0,
+      "first_learned": "2026-02-16T04:00:00Z",
+      "last_used": null,
+      "tags": ["learning", "self-improvement", "recursive"],
+      "notes": "Triggered when cycle_count % 10 == 0. Uses /improve skill."
     }
   },
   "anti_patterns": {
@@ -95,17 +81,17 @@
       "first_observed": "2026-02-16T01:00:00Z",
       "mitigation": "If the owner asks for something, do it now. Don't defer."
     },
-    "self-referential-architecture": {
-      "description": "Spending cycles on architecture docs, decision logs, and self-analysis instead of building capabilities",
-      "times_observed": 1,
-      "first_observed": "2026-02-16T01:00:00Z",
-      "mitigation": "Build things that are useful to someone other than yourself."
+    "direct-coding": {
+      "description": "Brain writing code directly instead of delegating to sub-agents in worktrees",
+      "times_observed": 0,
+      "first_observed": "2026-02-16T04:00:00Z",
+      "mitigation": "Always spawn a builder/improver in an isolated worktree. Brain manages, doesn't code."
     },
-    "cost-optimization-over-learning": {
-      "description": "Optimizing for $5/day cost discipline instead of maximizing capability growth. Skipping exploration, avoiding expensive experiments, choosing cheap models over better ones.",
+    "shared-session": {
+      "description": "Multiple actors sharing the same session causing lockouts and conflicts",
       "times_observed": 1,
-      "first_observed": "2026-02-15T15:30:00Z",
-      "mitigation": "Rebalance: prioritize capability growth. Use Sonnet/Opus for learning tasks. Allocate 20% of budget to exploration. Owner feedback: 'stop over-indexing for cheap, maximize tokens for self-growth.'"
+      "first_observed": "2026-02-16T03:00:00Z",
+      "mitigation": "Each actor owns its session. Responder is fully independent of brain."
     }
   },
   "exploration_log": {
@@ -115,10 +101,9 @@
       {
         "cycle": 5,
         "hypothesis": "Inbox processing in controller enables real-time owner interaction",
-        "result": "success \u2014 gather_inbox, archive_inbox, prompt injection all added"
+        "result": "success — gather_inbox, archive_inbox, prompt injection all added"
       }
     ]
   },
-  "pending_tasks": {},
-  "updated": "2026-02-15T18:12:12.543332"
+  "updated": "2026-02-16T04:00:00Z"
 }

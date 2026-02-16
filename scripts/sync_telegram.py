@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-Telegram sync daemon — plumbing only.
-Long-polls for messages → writes to inbox/.
+Telegram sync — plumbing only.
+Polls for messages → writes to inbox/.
 Reads outbox/ → sends via Telegram API.
 No Claude, no intelligence. Just moves data.
 
-Run as a background daemon (not cron — needs persistent polling).
+Modes:
+  --once    Run one pull+push cycle and exit (for router.sh cron)
+  (default) Long-poll daemon (for supervisor.sh to manage)
 """
 
 import json
 import subprocess
-import time
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -21,6 +23,7 @@ VSM_ROOT = Path(__file__).parent.parent
 INBOX = VSM_ROOT / "state" / "inbox"
 OUTBOX = VSM_ROOT / "state" / "outbox"
 OFFSET_FILE = VSM_ROOT / "state" / "telegram_offset"
+RESET_FILE = VSM_ROOT / "state" / "RESET"
 
 
 def load_config():
@@ -57,8 +60,8 @@ def _save_chat_id(chat_id):
             f.write(f"\nTELEGRAM_CHAT_ID={chat_id}\n")
 
 
-def pull_messages(config):
-    """Long-poll Telegram → write incoming messages to inbox/."""
+def pull_messages(config, once=False):
+    """Poll Telegram → write incoming messages to inbox/."""
     token = config.get("TELEGRAM_BOT_TOKEN", "")
     owner_id = config.get("TELEGRAM_CHAT_ID", "")
     if not token:
@@ -67,11 +70,14 @@ def pull_messages(config):
     api = f"https://api.telegram.org/bot{token}"
     offset = load_offset()
 
+    # --once mode: timeout=0 for immediate return; daemon mode: 30s long-poll
+    poll_timeout = 0 if once else 30
+
     try:
         resp = requests.get(
             f"{api}/getUpdates",
-            params={"offset": offset, "timeout": 30, "limit": 50},
-            timeout=35,
+            params={"offset": offset, "timeout": poll_timeout, "limit": 50},
+            timeout=poll_timeout + 5,
         )
         resp.raise_for_status()
         updates = resp.json().get("result", [])
@@ -96,6 +102,12 @@ def pull_messages(config):
         elif chat_id != str(owner_id):
             continue
 
+        # RESET detection: owner sends "RESET" to trigger emergency recovery
+        if msg["text"].strip().upper() == "RESET":
+            RESET_FILE.touch()
+            print(f"[sync-tg] RESET command received — touched {RESET_FILE}")
+            continue
+
         # Write to shared inbox
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         msg_id = msg.get("message_id", ts)
@@ -115,13 +127,13 @@ def pull_messages(config):
 
     # Kick the responder if new messages arrived (don't wait for cron)
     if new_messages:
-        responder = VSM_ROOT / "respond.sh"
+        responder = VSM_ROOT / "actors" / "responder.sh"
         if responder.exists():
             subprocess.Popen(
                 [str(responder)],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
-            print("[sync-tg] Kicked respond.sh")
+            print("[sync-tg] Kicked actors/responder.sh")
 
 
 def push_replies(config):
@@ -173,13 +185,22 @@ def main():
         print("[sync-tg] No TELEGRAM_BOT_TOKEN in .env, exiting")
         sys.exit(1)
 
+    once = "--once" in sys.argv
+
+    if once:
+        # Single pull+push cycle, then exit
+        pull_messages(config, once=True)
+        push_replies(config)
+        return
+
+    # Daemon mode: long-poll loop
     print("[sync-tg] Starting Telegram sync daemon...")
     while True:
         try:
             config = load_config()  # Re-read in case .env changes
-            pull_messages(config)
+            pull_messages(config, once=False)
             push_replies(config)
-            time.sleep(1)  # Brief pause between cycles to avoid hammering API
+            time.sleep(1)  # Brief pause between cycles
         except KeyboardInterrupt:
             print("\n[sync-tg] Stopped")
             break

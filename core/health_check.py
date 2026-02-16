@@ -83,6 +83,16 @@ def check_claude():
     return True, version
 
 
+@check("Actor scripts")
+def check_actors():
+    actors_dir = VSM_ROOT / "actors"
+    required = ["brain.sh", "responder.sh", "router.sh", "supervisor.sh", "lib.sh"]
+    missing = [f for f in required if not (actors_dir / f).exists()]
+    if missing:
+        return False, f"Missing: {', '.join(missing)}"
+    return True, f"All {len(required)} actor scripts present"
+
+
 @check("Cron jobs")
 def check_cron():
     result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
@@ -99,6 +109,45 @@ def check_agents():
         return False, "No agents directory"
     agents = list(agents_dir.glob("*.md"))
     return True, f"{len(agents)} agents: {', '.join(a.stem for a in agents)}"
+
+
+@check("Agent memory")
+def check_agent_memory():
+    mem_dir = VSM_ROOT / ".claude" / "agent-memory"
+    if not mem_dir.exists():
+        return False, "No agent-memory directory"
+    agents = [d.name for d in mem_dir.iterdir() if d.is_dir() and (d / "MEMORY.md").exists()]
+    return True, f"{len(agents)} agents with memory: {', '.join(agents)}"
+
+
+@check("Skills")
+def check_skills():
+    skills_dir = VSM_ROOT / ".claude" / "skills"
+    if not skills_dir.exists():
+        return False, "No skills directory"
+    skills = list(skills_dir.glob("*.md"))
+    if not skills:
+        return False, "No skills defined"
+    return True, f"{len(skills)} skills: {', '.join(s.stem for s in skills)}"
+
+
+@check("Telegram daemon")
+def check_telegram_daemon():
+    result = subprocess.run(["pgrep", "-f", "sync_telegram.py"], capture_output=True, text=True)
+    if result.returncode != 0:
+        return False, "Telegram daemon not running"
+    pids = result.stdout.strip().split("\n")
+    return True, f"Running (pid {pids[0]})"
+
+
+@check("Actor state directories")
+def check_actor_state():
+    actors_state = VSM_ROOT / "state" / "actors"
+    required = ["brain", "responder"]
+    missing = [a for a in required if not (actors_state / a).is_dir()]
+    if missing:
+        return False, f"Missing state dirs: {', '.join(missing)}"
+    return True, f"State dirs present for: {', '.join(required)}"
 
 
 def main():

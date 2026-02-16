@@ -1,0 +1,30 @@
+# VSM Actor Crontab — Actor Architecture
+#
+# Install with: crontab actors/crontab.example
+#
+# Architecture:
+#   supervisor.sh  — pure bash, no LLM. Crash recovery, telegram daemon, RESET handler.
+#   router.sh      — pure bash, no LLM. Syncs external APIs, routes inbox to responder.
+#   responder.sh   — haiku, own session. Fast owner replies. ISOLATED from brain.
+#   brain.sh       — opus, own session (resumed). Manager. Spawns sub-agents via Task tool.
+#
+# The brain spawns sub-agents (builder, researcher, auditor, improver) internally
+# using Claude Code's Task tool. Those sub-agents are NOT cron jobs —
+# they are children of the brain's supervision tree.
+#
+# The responder is deliberately OUTSIDE the brain's tree for fault isolation:
+# if the brain crashes, the owner can still communicate.
+#
+# Staggered timing ensures: supervisor cleans up -> router delivers mail -> actors process.
+
+# Supervisor — crash recovery, telegram daemon, RESET handler (pure bash)
+* * * * *       ~/projects/vsm/v2/actors/supervisor.sh >> ~/projects/vsm/v2/state/logs/cron.log 2>&1
+
+# Router — sync telegram/email (--once), route inbox -> responder mailbox (pure bash)
+* * * * *       sleep 5 && ~/projects/vsm/v2/actors/router.sh >> ~/projects/vsm/v2/state/logs/cron.log 2>&1
+
+# Responder — fast owner replies, escalates hard questions to brain (haiku, 60s max)
+* * * * *       sleep 10 && ~/projects/vsm/v2/actors/responder.sh >> ~/projects/vsm/v2/state/logs/cron.log 2>&1
+
+# Brain — manager/orchestrator, spawns sub-agents, serializes merges (opus, 9min max)
+*/5 * * * *     sleep 15 && ~/projects/vsm/v2/actors/brain.sh >> ~/projects/vsm/v2/state/logs/cron.log 2>&1

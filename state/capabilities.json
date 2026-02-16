@@ -8,21 +8,21 @@
       "times_succeeded": 2,
       "times_failed": 0,
       "first_learned": "2026-02-16T01:00:00Z",
-      "last_used": "2026-02-15T17:45:00Z",
+      "last_used": "2026-02-15T17:49:18.874604",
       "tags": [
         "git",
         "infrastructure"
       ],
-      "notes": "Pull before commit if remote may have changed. Push verified working to origin."
+      "notes": "Pull before commit if remote may have changed."
     },
     "send-email": {
       "description": "Send email to owner via agentmail.to API",
-      "confidence": 0.75,
-      "times_used": 1,
-      "times_succeeded": 1,
+      "confidence": 0.8,
+      "times_used": 0,
+      "times_succeeded": 0,
       "times_failed": 0,
       "first_learned": "2026-02-16T01:00:00Z",
-      "last_used": "2026-02-15T17:45:00Z",
+      "last_used": null,
       "tags": [
         "email",
         "communication",
@@ -43,6 +43,28 @@
         "planning"
       ],
       "notes": "JSON files with id, title, description, priority, status."
+    },
+    "telegram-bot": {
+      "description": "Respond to owner Telegram messages via polling bot",
+      "confidence": 0.50,
+      "times_used": 0,
+      "times_succeeded": 0,
+      "times_failed": 0,
+      "first_learned": "2026-02-15T17:50:00Z",
+      "last_used": null,
+      "tags": ["telegram", "communication", "owner"],
+      "notes": "Needs TELEGRAM_BOT_TOKEN + TELEGRAM_OWNER_USERNAME in .env. Cron every 1min."
+    },
+    "build-feature": {
+      "description": "Ship a new feature end-to-end: research, code, test, deploy, notify owner",
+      "confidence": 0.70,
+      "times_used": 1,
+      "times_succeeded": 1,
+      "times_failed": 0,
+      "first_learned": "2026-02-15T17:50:00Z",
+      "last_used": "2026-02-15T17:50:00Z",
+      "tags": ["coding", "feature", "deployment"],
+      "notes": "Telegram bot built in one cycle. Full pipeline: research API, write code, add cron, email owner."
     },
     "health-check": {
       "description": "Run system health diagnostics via python3 core/health_check.py",
@@ -91,5 +113,5 @@
     "exploration_rate": 0.15,
     "recent_experiments": []
   },
-  "updated": "2026-02-15T17:42:20.005177"
+  "updated": "2026-02-15T17:49:18.875008"
 }

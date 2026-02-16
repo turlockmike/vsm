@@ -222,17 +222,22 @@ def main():
         print(f"[email] Processing: {subject}")
 
         reply_body, task_info = classify_and_respond(sender_name, subject, text)
-        if reply_body:
-            if task_info:
-                task_id = create_task(task_info, thread_id, subject, sender)
-                print(f"[email] Task {task_id}: {task_info['title']}")
+        if not reply_body:
+            # Fallback: acknowledge receipt even if Claude fails
+            reply_body = (
+                f"Got your message. I'm having trouble generating a full response "
+                f"right now, but I've received it and will follow up shortly."
+            )
+            print(f"[email] Fallback reply: {subject}")
 
-            send_reply(config, thread_id, owner_email, subject, reply_body)
-            replied.add(thread_id)
-            save_replied(replied)
-            print(f"[email] Replied: {subject}")
-        else:
-            print(f"[email] Failed: {subject}")
+        if task_info:
+            task_id = create_task(task_info, thread_id, subject, sender)
+            print(f"[email] Task {task_id}: {task_info['title']}")
+
+        send_reply(config, thread_id, owner_email, subject, reply_body)
+        replied.add(thread_id)
+        save_replied(replied)
+        print(f"[email] Replied: {subject}")
 
 
 if __name__ == "__main__":

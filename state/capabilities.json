@@ -28,7 +28,7 @@
         "communication",
         "owner"
       ],
-      "notes": "python3 core/comm.py 'subject' 'body'. Config in .env."
+      "notes": "Write JSON to state/outbox/. Sync daemons deliver. Or: python3 core/comm.py 'text'. Config in .env."
     },
     "manage-tasks": {
       "description": "Create and manage task queue in sandbox/tasks/",
@@ -72,7 +72,7 @@
         "communication",
         "controller"
       ],
-      "notes": "gather_inbox() in controller.py reads state/inbox/*.json, build_prompt adds INBOX section, archive_inbox() moves to inbox_archive/ after cycle."
+      "notes": "respond.sh builds inbox context from state/inbox/*.json, feeds to Claude. Inbox files moved to state/inbox/archive/ after processing."
     },
     "status-reporting": {
       "times_used": 1,

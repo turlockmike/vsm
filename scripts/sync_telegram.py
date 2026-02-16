@@ -113,15 +113,15 @@ def pull_messages(config):
 
     save_offset(offset)
 
-    # Kick the brain if new messages arrived (don't wait for cron)
+    # Kick the responder if new messages arrived (don't wait for cron)
     if new_messages:
-        brain = VSM_ROOT / "brain.sh"
-        if brain.exists():
+        responder = VSM_ROOT / "respond.sh"
+        if responder.exists():
             subprocess.Popen(
-                [str(brain)],
+                [str(responder)],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
-            print("[sync-tg] Kicked brain.sh")
+            print("[sync-tg] Kicked respond.sh")
 
 
 def push_replies(config):

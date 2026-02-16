@@ -29,10 +29,10 @@ You will receive:
 
 ## What You MUST NOT Change
 
-- `core/controller.py` — the nervous system (owner-managed)
 - `core/learning.py` — the learning engine (owner-managed)
-- `.env` — secrets
 - `core/comm.py` — communication (owner-managed)
+- `brain.sh`, `respond.sh`, `vsm` — kernel entry points (owner-managed)
+- `.env` — secrets
 
 ## Process
 

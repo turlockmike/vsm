@@ -23,7 +23,7 @@ def check(name):
 @check("Python imports")
 def check_imports():
     from learning import load_capabilities, save_capabilities
-    from comm import send_email
+    from comm import send_message
     return True, "All core modules importable"
 
 

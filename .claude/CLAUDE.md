@@ -62,7 +62,7 @@ The controller runs an automatic improvement cycle:
 3. **Improve**: The improver agent makes ONE concrete change based on evidence
 
 The improver can modify: CLAUDE.md, HEARTBEAT.md, agents, hooks, capabilities.
-It CANNOT modify: controller.py, learning.py, comm.py, .env (owner-managed).
+It CANNOT modify: brain.sh, respond.sh, vsm, learning.py, comm.py, .env (owner-managed).
 
 Changes go on a branch and fast-forward merge. If something breaks, git revert.
 
